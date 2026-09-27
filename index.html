@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
-  <title>Presupuestador de Muebles · V0.5</title>
+  <title>Presupuestador de Muebles · V0.6</title>
   <link rel="stylesheet" href="styles.css" />
   <script type="importmap">
     {
@@ -23,7 +23,7 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V0.5 · REGLAS DE CORTE</div>
+    <div class="version-badge">V0.6 · CATÁLOGO</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -144,11 +144,12 @@
         <section class="panel material-form-panel">
           <div class="panel-title"><div><span class="step">01</span><h3>Agregar material</h3></div></div>
           <form id="materialForm" class="material-form">
-            <label>Material<input id="materialName" type="text" placeholder="Ej. MDF" required></label>
-            <label>Grosor<div class="input-with-unit"><input id="materialThickness" type="number" min="1" step="1" placeholder="15" required><span>mm</span></div></label>
+            <label>Material<select id="materialName" required></select></label>
+            <label>Grosor<select id="materialThickness" required></select></label>
             <label>Valor por m²<div class="input-with-unit"><input id="materialPrice" type="number" min="0" step="100" placeholder="48000" required><span>ARS</span></div></label>
-            <button class="primary-btn" type="submit">Agregar material</button>
+            <button class="primary-btn" type="submit">Agregar / actualizar precio</button>
           </form>
+          <p class="helper form-helper">Seleccioná el material y grosor. Sólo tenés que ingresar el precio actual por m². Si ya existe esa combinación, se actualizará su precio.</p>
         </section>
 
         <section class="panel material-table-panel">
@@ -174,7 +175,7 @@
     </section>
   </main>
 
-  <footer class="footer-note">V0.5 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V0.6 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

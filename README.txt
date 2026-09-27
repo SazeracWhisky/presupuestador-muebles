@@ -1,16 +1,15 @@
-PRESUPUESTADOR DE MUEBLES · V0.5
+PRESUPUESTADOR DE MUEBLES — V0.6
 
-Novedades:
-- Menú superior con Cálculo de mueble y Base de materiales.
-- Materiales editables por nombre + grosor + valor/m².
-- Divisiones verticales con posición individual.
-- Estantes horizontales con módulo y altura individual.
-- Regla de compra a medida configurable: mínimo por pieza y redondeo hacia arriba.
-- Despiece y costo por pieza.
-- Visor 3D proporcional con espesor real.
+Incluye:
+- Cálculo de mueble con selección de material desde catálogo.
+- Base de materiales con listas desplegables predefinidas para materiales y grosores.
+- El precio por m² es el único dato que se escribe al cargar una combinación.
+- Si una combinación material + grosor ya existe, se actualiza su precio.
+- El precio puede modificarse en cualquier momento desde la tabla.
+- Reglas de corte mínimo y redondeo hacia arriba.
+- Divisiones verticales y estantes con posiciones independientes.
+- Visualización 3D proporcional mediante Three.js.
 
-REGLA ACTUAL DE COSTO POR PIEZA
-Costo bruto de una pieza = área de la pieza × precio/m².
-Costo cobrado = techo(max(costo bruto, mínimo) / unidad de redondeo) × unidad.
-
-Ejemplo: $11.350 → $12.000. Un cálculo de $2.500 → $4.000 si el mínimo es $4.000 y el redondeo es $1.000.
+Notas:
+- Los datos del catálogo se guardan en localStorage de este navegador/dispositivo en esta versión.
+- Para publicación en GitHub Pages, subir el contenido de esta carpeta a la raíz del repositorio.

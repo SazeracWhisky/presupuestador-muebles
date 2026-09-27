@@ -5,6 +5,21 @@ const $ = (id) => document.getElementById(id);
 const MATERIALS_KEY = 'presupuestador_materiales_v3';
 const SETTINGS_KEY = 'presupuestador_settings_v1';
 const MODEL_KEY = 'presupuestador_model_v1';
+const MATERIAL_OPTIONS = [
+  'Melamina Blanca Aglomerado',
+  'Melamina Blanca MDF',
+  'Melamina Color Clásico Aglomerado (Negro/Cedro)',
+  'Melamina Color Nature MDF (Cedro/Roble Dakar/Roble Americano)',
+  'MDF',
+  'Fibroplus Blanco',
+  'Fibroplus Color (Cedro/Negro)',
+  'Pino',
+  'Eucaliptu',
+  'Fenólico',
+  'Terciado Pino',
+  'Enchapado Aglomerado (Cedro/Cerejeira/Paraíso/Guatambú)'
+];
+const THICKNESS_OPTIONS = [3,5,6,8,9,10,12,15,18,20,22,25,30,34];
 
 const state = {
   materials: loadMaterials(),
@@ -37,6 +52,7 @@ function loadMaterials(){
   } catch{}
   return [{id:cryptoId(),name:'MDF',thickness:15,price:48000}];
 }
+
 function loadSettings(){ try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }catch{return{};} }
 function saveMaterials(){ localStorage.setItem(MATERIALS_KEY, JSON.stringify(state.materials)); }
 function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({minimumPieceCost:state.minimumPieceCost,roundingUnit:state.roundingUnit})); }
@@ -48,16 +64,28 @@ if(!Number.isFinite(state.minimumPieceCost)) state.minimumPieceCost=4000;
 if(!Number.isFinite(state.roundingUnit) || state.roundingUnit<=0) state.roundingUnit=1000;
 if(state.materials[0]) state.selectedMaterialId=state.materials[0].id;
 
+function renderMaterialOptions(){
+  const materialSelect=$('materialName');
+  const thicknessSelect=$('materialThickness');
+  if(materialSelect){
+    materialSelect.innerHTML=MATERIAL_OPTIONS.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+  }
+  if(thicknessSelect){
+    thicknessSelect.innerHTML=THICKNESS_OPTIONS.map(mm=>`<option value="${mm}">${mm} mm</option>`).join('');
+  }
+}
+
 function renderMaterialCatalog(){
+  renderMaterialOptions();
   const select=$('materialSelect');
   select.innerHTML=state.materials.length ? state.materials.map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} · ${m.thickness} mm</option>`).join('') : '<option value="">No hay materiales cargados</option>';
   if(!state.materials.some(m=>m.id===state.selectedMaterialId)) state.selectedMaterialId=state.materials[0]?.id || '';
   if(state.selectedMaterialId) select.value=state.selectedMaterialId;
   const body=$('materialsBody');
   body.innerHTML=state.materials.map(m=>`<tr>
-    <td><input class="catalog-inline material-name" data-id="${escapeHtml(m.id)}" value="${escapeHtml(m.name)}" /></td>
-    <td><div class="input-with-unit"><input class="catalog-inline material-thickness" data-id="${escapeHtml(m.id)}" type="number" min="1" step="1" value="${m.thickness}" /></div></td>
-    <td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${escapeHtml(m.id)}" type="number" min="0" step="100" value="${m.price}" /></div></td>
+    <td>${escapeHtml(m.name)}</td>
+    <td>${m.thickness} mm</td>
+    <td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${escapeHtml(m.id)}" type="number" min="0" step="100" value="${m.price}" aria-label="Precio por m²" /></div></td>
     <td><button class="danger-btn delete-material" data-id="${escapeHtml(m.id)}">Eliminar</button></td>
   </tr>`).join('');
   $('materialsCount').textContent=`${state.materials.length} ${state.materials.length===1?'material':'materiales'}`;
@@ -245,8 +273,37 @@ function bind(){
   $('shelvesList').addEventListener('input',e=>{const id=e.target.dataset.id;if(!id)return; const item=state.shelves.find(s=>s.id===id);if(item){item.height=Number(e.target.value)||0;updateBudget();}});
   $('shelvesList').addEventListener('change',e=>{const id=e.target.dataset.id;if(!id)return; const item=state.shelves.find(s=>s.id===id);if(item){item.section=Number(e.target.value)||0;updateBudget();renderComponents();}});
   $('shelvesList').addEventListener('click',e=>{if(!e.target.classList.contains('remove-shelf'))return;state.shelves=state.shelves.filter(s=>s.id!==e.target.dataset.id);renderComponents();updateBudget();});
-  $('materialForm').addEventListener('submit',e=>{e.preventDefault();const name=$('materialName').value.trim();const thickness=Number($('materialThickness').value);const price=Number($('materialPrice').value);if(!name||thickness<=0||price<0)return;const item={id:cryptoId(),name,thickness,price};state.materials.push(item);state.selectedMaterialId=item.id;saveMaterials();$('materialForm').reset();renderMaterialCatalog();updateBudget();});
-  $('materialsBody').addEventListener('input',e=>{const id=e.target.dataset.id;const m=state.materials.find(x=>x.id===id);if(!m)return;if(e.target.classList.contains('material-name'))m.name=e.target.value;if(e.target.classList.contains('material-thickness'))m.thickness=Number(e.target.value)||m.thickness;if(e.target.classList.contains('material-price'))m.price=Number(e.target.value)||0;saveMaterials();if(state.selectedMaterialId===id)updateBudget();renderMaterialCatalog();});
+  $('materialForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const name=$('materialName').value;
+    const thickness=Number($('materialThickness').value);
+    const price=Number($('materialPrice').value);
+    if(!name || !THICKNESS_OPTIONS.includes(thickness) || price<0 || !Number.isFinite(price)) return;
+    const existing=state.materials.find(m=>m.name===name && Number(m.thickness)===thickness);
+    if(existing){
+      existing.price=price;
+      state.selectedMaterialId=existing.id;
+    } else {
+      const item={id:cryptoId(),name,thickness,price};
+      state.materials.push(item);
+      state.selectedMaterialId=item.id;
+    }
+    saveMaterials();
+    $('materialPrice').value='';
+    renderMaterialCatalog();
+    updateBudget();
+  });
+  $('materialsBody').addEventListener('input',e=>{
+    const id=e.target.dataset.id;
+    const m=state.materials.find(x=>x.id===id);
+    if(!m || !e.target.classList.contains('material-price')) return;
+    const next=Number(e.target.value);
+    if(Number.isFinite(next) && next>=0){
+      m.price=next;
+      saveMaterials();
+      if(state.selectedMaterialId===id) updateBudget();
+    }
+  });
   $('materialsBody').addEventListener('click',e=>{if(!e.target.classList.contains('delete-material'))return;const id=e.target.dataset.id;state.materials=state.materials.filter(m=>m.id!==id);if(state.selectedMaterialId===id)state.selectedMaterialId=state.materials[0]?.id||'';saveMaterials();renderMaterialCatalog();updateBudget();});
   $('minimumPieceCost').addEventListener('input',()=>{state.minimumPieceCost=Math.max(Number($('minimumPieceCost').value)||0,0);saveSettings();updateBudget();});
   $('roundingUnit').addEventListener('input',()=>{state.roundingUnit=Math.max(Number($('roundingUnit').value)||1,1);saveSettings();updateBudget();});
