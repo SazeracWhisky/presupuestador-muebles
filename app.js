@@ -15,6 +15,18 @@ let shelves = [
 ];
 let basePlacement = "inside";
 let roofPlacement = "inside";
+let drawers = [];
+const DRAWER_MIN_WALL = 80;
+const DRAWER_GUIDE_CLEARANCE = {z:25, telescopica:26};
+const ACCESSORIES_KEY = "presupuestador_accesorios_v1";
+
+function loadAccessories(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(ACCESSORIES_KEY)||"[]");
+    return Array.isArray(raw)?raw:[];
+  }catch{return []}
+}
+function guideAccessories(){return loadAccessories().filter(x=>x && x.categoryId==="guias");}
 
 // Perspective orbit camera.
 // yaw = horizontal orbit, pitch = vertical orbit, distance = camera distance via zoom.
@@ -174,89 +186,94 @@ function sections(model){
   return out;
 }
 
-function getParts(){
-  const m = dims(), ss = sections(m), p = [];
-  const innerW = Math.max(m.W - 2*m.T, 0);
-  const innerH = Math.max(m.H - 2*m.T, 0);
-
-  // Horizontal pieces:
-  // "inside" = between side panels, so width is W - 2T.
-  // "outside" = covers the sides, so width is the full W.
-  const baseWidth = basePlacement === "inside" ? Math.max(m.W - 2*m.T, 0) : m.W;
-  const roofWidth = roofPlacement === "inside" ? Math.max(m.W - 2*m.T, 0) : m.W;
-
-  // If a horizontal panel sits ON the laterals, the overall height includes
-  // that panel's thickness outside the verticals. The verticals must therefore
-  // be shortened on that side. If the horizontal is BETWEEN the laterals, the
-  // laterals remain full-height and the horizontal width is W - 2T.
-  const bottomInset = basePlacement === "outside" ? m.T : 0;
-  const topInset = roofPlacement === "outside" ? m.T : 0;
-  const verticalHeight = Math.max(m.H - bottomInset - topInset, 0);
-  const verticalCenterY = (bottomInset - topInset) / 2;
-
-  // Side panels.
-  p.push({
-    name:"Lateral izquierdo", w:m.T, h:verticalHeight, d:m.D,
-    x:-m.W/2+m.T/2, y:verticalCenterY, z:0, type:"outer", grain:"vertical"
-  });
-  p.push({
-    name:"Lateral derecho", w:m.T, h:verticalHeight, d:m.D,
-    x:m.W/2-m.T/2, y:verticalCenterY, z:0, type:"outer", grain:"vertical"
-  });
-
-  // Base and roof keep their outer faces flush with the overall dimensions.
-  const baseY = basePlacement === "inside"
-    ? -m.H/2 + bottomInset + m.T/2
-    : -m.H/2 + m.T/2;
-  const roofY = roofPlacement === "inside"
-    ?  m.H/2 - topInset - m.T/2
-    :  m.H/2 - m.T/2;
-
-  p.push({
-    name:`Base · ${basePlacement === "inside" ? "entre laterales" : "sobre laterales"}`,
-    w:baseWidth, h:m.T, d:m.D, x:0, y:baseY, z:0,
-    type:"horizontal", grain:"horizontal"
-  });
-  p.push({
-    name:`Tapa · ${roofPlacement === "inside" ? "entre laterales" : "sobre laterales"}`,
-    w:roofWidth, h:m.T, d:m.D, x:0, y:roofY, z:0,
-    type:"horizontal", grain:"horizontal"
-  });
-
-  // Vertical dividers always live in the clear opening between base and roof.
-  dividers.forEach((d,i)=>{
-    const x = -m.W/2 + m.T + d.position + m.T/2;
-    p.push({
-      name:`División vertical ${i+1}`,
-      w:m.T, h:innerH, d:m.D, x, y:verticalCenterY, z:0,
-      type:"divider", grain:"vertical"
-    });
-  });
-
-  // Shelves: clear width of each module is already computed from the faces of
-  // the surrounding verticals. Their width therefore changes automatically
-  // when the user moves or adds a divider.
-  shelves.forEach((s,i)=>{
-    const sec = ss[clamp(Math.round(+s.section||0),0,Math.max(ss.length-1,0))];
-    const h = clamp(+s.height||0,0,Math.max(innerH-m.T,0));
-    const y = -m.H/2 + m.T + h + m.T/2;
-    p.push({
-      name:`Estante ${i+1}`,
-      w:sec.width, h:m.T, d:m.D,
-      x:-m.W/2+m.T+sec.left+sec.width/2, y, z:0,
-      type:"shelf", section:sec.index, grain:"horizontal"
-    });
-  });
-
-  return {
-    model:m,
-    sections:ss,
-    parts:p,
-    construction:{
-      baseWidth, roofWidth, verticalHeight, innerW, innerH,
-      basePlacement, roofPlacement, clearHeight:innerH
+function getDrawerSpaces(data){
+  const m=data.model, ss=data.sections, innerH=data.construction.innerH, spaces=[];
+  for(const sec of ss){
+    const shelfSupports=(data.shelfMap||[]).filter(s=>s.section===sec.index).sort((x,y)=>x.height-y.height);
+    let previousTop=0, zone=1;
+    for(const sh of shelfSupports){
+      const clearH=Math.max(0,sh.height-previousTop);
+      spaces.push({
+        id:`${sec.index}-${zone}`,section:sec.index,zone,
+        label:`Módulo ${sec.index+1} · Espacio ${zone} · ${Math.round(clearH)} mm`,
+        width:sec.width,height:clearH,bottom:previousTop,top:sh.height
+      });
+      previousTop=sh.height+m.T; zone++;
     }
-  };
+    const clearTop=Math.max(0,innerH-previousTop);
+    spaces.push({
+      id:`${sec.index}-${zone}`,section:sec.index,zone,
+      label:`Módulo ${sec.index+1} · Espacio ${zone} · ${Math.round(clearTop)} mm`,
+      width:sec.width,height:clearTop,bottom:previousTop,top:innerH
+    });
+  }
+  return spaces;
+}
+
+function getParts(){
+  const m=dims(),ss=sections(m),p=[];
+  const innerW=Math.max(m.W-2*m.T,0),innerH=Math.max(m.H-2*m.T,0);
+  const baseWidth=basePlacement==="inside"?innerW:m.W;
+  const roofWidth=roofPlacement==="inside"?innerW:m.W;
+  const bottomInset=basePlacement==="outside"?m.T:0;
+  const topInset=roofPlacement==="outside"?m.T:0;
+  const verticalHeight=Math.max(m.H-bottomInset-topInset,0);
+  const verticalCenterY=(bottomInset-topInset)/2;
+
+  p.push({name:"Lateral izquierdo",w:m.T,h:verticalHeight,d:m.D,x:-m.W/2+m.T/2,y:verticalCenterY,z:0,type:"outer",grain:"vertical"});
+  p.push({name:"Lateral derecho",w:m.T,h:verticalHeight,d:m.D,x:m.W/2-m.T/2,y:verticalCenterY,z:0,type:"outer",grain:"vertical"});
+
+  const baseY=basePlacement==="inside"?-m.H/2+bottomInset+m.T/2:-m.H/2+m.T/2;
+  const roofY=roofPlacement==="inside"?m.H/2-topInset-m.T/2:m.H/2-m.T/2;
+  p.push({name:`Base · ${basePlacement==="inside"?"entre laterales":"sobre laterales"}`,w:baseWidth,h:m.T,d:m.D,x:0,y:baseY,z:0,type:"horizontal",grain:"horizontal"});
+  p.push({name:`Tapa · ${roofPlacement==="inside"?"entre laterales":"sobre laterales"}`,w:roofWidth,h:m.T,d:m.D,x:0,y:roofY,z:0,type:"horizontal",grain:"horizontal"});
+
+  dividers.forEach((d,i)=>{
+    const x=-m.W/2+m.T+d.position+m.T/2;
+    p.push({name:`División vertical ${i+1}`,w:m.T,h:innerH,d:m.D,x,y:verticalCenterY,z:0,type:"divider",grain:"vertical"});
+  });
+
+  const shelfMap=[];
+  shelves.forEach((shelf,i)=>{
+    const sec=ss[clamp(Math.round(+shelf.section||0),0,Math.max(ss.length-1,0))];
+    const height=clamp(+shelf.height||0,0,Math.max(innerH-m.T,0));
+    shelfMap.push({index:i,section:sec.index,height,width:sec.width});
+    const y=-m.H/2+m.T+height+m.T/2;
+    p.push({name:`Estante ${i+1}`,w:sec.width,h:m.T,d:m.D,x:-m.W/2+m.T+sec.left+sec.width/2,y,z:0,type:"shelf",section:sec.index,grain:"horizontal"});
+  });
+
+  const construction={baseWidth,roofWidth,verticalHeight,innerW,innerH,basePlacement,roofPlacement,clearHeight:innerH};
+  const temp={model:m,sections:ss,parts:p,construction,shelfMap};
+  const drawerSpaces=getDrawerSpaces(temp);
+
+  drawers.forEach((d,i)=>{
+    const sp=drawerSpaces.find(x=>x.id===d.spaceId);
+    if(!sp)return;
+    const guide=d.guideSystem==="telescopica"?"telescopica":"z";
+    const clearance=DRAWER_GUIDE_CLEARANCE[guide];
+    const outerW=Math.max(0,sp.width-clearance);
+    const boxH=clamp(+d.boxHeight||DRAWER_MIN_WALL,DRAWER_MIN_WALL,Math.max(sp.height,DRAWER_MIN_WALL));
+    const boxD=clamp(+d.depth||m.D,50,Math.max(m.D,50));
+    const innerBoxW=Math.max(0,outerW-2*m.T);
+    const sec=ss[sp.section];
+    const centerX=-m.W/2+m.T+sec.left+sec.width/2;
+    const centerZ=-(m.D-boxD)/2;
+    const boxY=-m.H/2+m.T+sp.bottom+boxH/2;
+
+    p.push({name:`Cajón ${i+1} · lateral izquierdo`,w:m.T,h:boxH,d:boxD,x:centerX-outerW/2+m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
+    p.push({name:`Cajón ${i+1} · lateral derecho`,w:m.T,h:boxH,d:boxD,x:centerX+outerW/2-m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
+    p.push({name:`Cajón ${i+1} · frente interno`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ-boxD/2+m.T/2,type:"drawer",grain:"vertical"});
+    p.push({name:`Cajón ${i+1} · trasero`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ+boxD/2-m.T/2,type:"drawer",grain:"vertical"});
+    p.push({name:`Cajón ${i+1} · fondo`,w:innerBoxW,h:m.T,d:Math.max(0,boxD-2*m.T),x:centerX,y:boxY-boxH/2+m.T/2,z:centerZ,type:"drawer",grain:"horizontal"});
+
+    const frontMode=d.frontMode==="outside"?"outside":"inside";
+    const frontW=frontMode==="inside"?Math.max(0,sp.width-6):sp.width+10;
+    const frontH=frontMode==="inside"?Math.max(0,sp.height-6):sp.height+10;
+    const frontZ=frontMode==="inside"?-m.D/2-m.T/2:-m.D/2+m.T/2;
+    p.push({name:`Frente de cajón ${i+1} · ${frontMode==="inside"?"dentro":"delante"}`,w:frontW,h:frontH,d:m.T,x:centerX,y:-m.H/2+m.T+sp.bottom+sp.height/2,z:frontZ,type:"drawer-front",grain:"vertical"});
+  });
+
+  return {...temp,drawerSpaces};
 }
 
 function roundingCost(raw){
@@ -268,34 +285,35 @@ function roundingCost(raw){
 }
 
 function formatPieceDims(p){
-  // Show cut dimensions as length × depth × thickness for horizontal pieces,
-  // and height × depth × thickness for vertical pieces.
-  if(p.type==="outer" || p.type==="divider"){
-    return `${p.h.toFixed(0)} × ${p.d.toFixed(0)} × ${p.w.toFixed(0)} mm`;
-  }
+  if(p.type==="outer"||p.type==="divider")return `${p.h.toFixed(0)} × ${p.d.toFixed(0)} × ${p.w.toFixed(0)} mm`;
   return `${p.w.toFixed(0)} × ${p.d.toFixed(0)} × ${p.h.toFixed(0)} mm`;
 }
 
 function updateAll(){
-  const data=getParts(), r=rec(), hasPrice=!!r;
+  const data=getParts(),r=rec(),hasPrice=!!r;
   let area=0,cost=0;
-
   $("partsBody").innerHTML=data.parts.map(p=>{
-    const a=p.w*p.d/1e6;
-    area+=a;
-    const line=hasPrice?roundingCost(a*r.price):null;
+    const aa=p.w*p.d/1e6; area+=aa;
+    const line=hasPrice?roundingCost(aa*r.price):null;
     if(line!=null)cost+=line;
-    return `<tr><td>${p.name}</td><td>1</td><td>${formatPieceDims(p)}</td><td>${a.toFixed(3)} m²</td><td>${line==null?"—":money(line)}</td></tr>`;
+    return `<tr><td>${p.name}</td><td>1</td><td>${formatPieceDims(p)}</td><td>${aa.toFixed(3)} m²</td><td>${line==null?"—":money(line)}</td></tr>`;
   }).join("");
 
-  const waste=+($("waste").value||0), areaWaste=area*(1+waste/100);
+  const accessories=loadAccessories();
+  for(const d of drawers){
+    if(!d.guideId)continue;
+    const g=accessories.find(x=>x.id===d.guideId);
+    if(g)cost+=Number(g.price)||0;
+  }
+
+  const waste=+($("waste").value||0),areaWaste=area*(1+waste/100);
   $("areaM2").textContent=area?`${area.toFixed(3)} m²`:"—";
   $("areaWaste").textContent=area?`${areaWaste.toFixed(3)} m²`:"—";
   $("priceM2Label").textContent=hasPrice?`${money(r.price)} / m²`:"Precio pendiente";
   $("materialCost").textContent=hasPrice?money(cost):"—";
   $("totalCost").textContent=hasPrice?money(cost):"—";
   $("budgetNote").textContent=hasPrice
-    ?"El costo aplica mínimo por pieza y redondeo del proveedor."
+    ?"El costo aplica mínimo por pieza y redondeo del proveedor. Los accesorios seleccionados se suman cuando tienen precio cargado."
     :"Podés configurar el mueble sin precio; para calcular costo cargá esta combinación en Base de materiales.";
 
   $("innerWidth").textContent=`${data.construction.innerW.toFixed(0)} mm`;
@@ -306,113 +324,114 @@ function updateAll(){
 
   const st={minimumPieceCost:4000,roundingUnit:1000};
   try{Object.assign(st,JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}"))}catch{}
-  $("ruleMin").textContent=money(st.minimumPieceCost);
-  $("ruleRound").textContent=money(st.roundingUnit);
+  $("ruleMin").textContent=money(st.minimumPieceCost); $("ruleRound").textContent=money(st.roundingUnit);
 
   const warnings=[];
-  data.sections.forEach((sec)=>{ if(sec.width<100)warnings.push(`Módulo ${sec.index+1} tiene ${sec.width.toFixed(0)} mm libres.`); });
-  shelves.forEach((sh,i)=>{
-    if(Number(sh.height)<0 || Number(sh.height)>data.construction.innerH-data.model.T)
-      warnings.push(`El estante ${i+1} está fuera de la altura interior útil.`);
-    const sec=data.sections[clamp(Math.round(+sh.section||0),0,Math.max(data.sections.length-1,0))];
-    if(sec && sec.width<=data.model.T)warnings.push(`El estante ${i+1} no tiene un ancho útil suficiente en su módulo.`);
+  data.sections.forEach(sec=>{if(sec.width<100)warnings.push(`Módulo ${sec.index+1} tiene ${sec.width.toFixed(0)} mm libres.`)});
+  drawers.forEach((d,i)=>{
+    const sp=data.drawerSpaces.find(x=>x.id===d.spaceId);
+    if(!sp)warnings.push(`Cajón ${i+1}: el espacio ya no existe.`);
+    else{
+      if(sp.height<DRAWER_MIN_WALL)warnings.push(`Cajón ${i+1}: el espacio tiene menos de ${DRAWER_MIN_WALL} mm.`);
+      if(Number(d.boxHeight)<DRAWER_MIN_WALL)warnings.push(`Cajón ${i+1}: las paredes deben medir al menos ${DRAWER_MIN_WALL} mm.`);
+      if(Number(d.boxHeight)>sp.height)warnings.push(`Cajón ${i+1}: la caja supera la altura disponible.`);
+      const clear=d.guideSystem==="telescopica"?26:25;
+      if(sp.width<=clear)warnings.push(`Cajón ${i+1}: no hay ancho suficiente para esa guía.`);
+    }
   });
   $("modelWarning").textContent=warnings.join(" ");
   $("modelWarning").classList.toggle("hidden",!warnings.length);
-
   render3D(data);
 }
 
 function renderComponents(){
-  const m = dims(), ss = sections(m);
+  const m=dims(),ss=sections(m),data=getParts(),spaces=data.drawerSpaces,guideList=guideAccessories();
 
-  $("dividersList").innerHTML = dividers.map((d,i)=>`
-    <div class="component-row">
-      <label>División ${i+1}<div class="input-with-unit">
-        <input class="divPos" data-id="${d.id}" type="number" min="0" max="${Math.max(m.W-3*m.T,0)}" value="${Math.round(d.position)}">
-        <span>mm</span>
-      </div></label>
-      <button class="danger-btn remDiv" data-id="${d.id}" type="button">Eliminar</button>
-    </div>`).join("") || '<div class="empty-mini">No hay divisiones.</div>';
+  $("dividersList").innerHTML=dividers.map((d,i)=>`
+    <div class="component-row"><label>División ${i+1}<div class="input-with-unit">
+      <input class="divPos" data-id="${d.id}" type="number" min="0" max="${Math.max(m.W-3*m.T,0)}" value="${Math.round(d.position)}"><span>mm</span>
+    </div></label><button class="danger-btn remDiv" data-id="${d.id}" type="button">Eliminar</button></div>`).join("")||'<div class="empty-mini">No hay divisiones.</div>';
 
-  $("shelvesList").innerHTML = shelves.map((s,i)=>`
+  $("shelvesList").innerHTML=shelves.map((s,i)=>`
     <div class="component-row shelf-row">
-      <label>Estante ${i+1}<div class="input-with-unit">
-        <input class="shelfH" data-id="${s.id}" type="number" min="0" value="${Math.round(s.height)}">
-        <span>mm</span>
-      </div></label>
-      <label>Módulo<select class="shelfS" data-id="${s.id}">
-        ${ss.map(sec=>`<option value="${sec.index}" ${sec.index===s.section?"selected":""}>${sec.index+1} · ${Math.round(sec.width)} mm libres</option>`).join("")}
-      </select></label>
+      <label>Estante ${i+1}<div class="input-with-unit"><input class="shelfH" data-id="${s.id}" type="number" min="0" value="${Math.round(s.height)}"><span>mm</span></div></label>
+      <label>Módulo<select class="shelfS" data-id="${s.id}">${ss.map(sec=>`<option value="${sec.index}" ${sec.index===s.section?"selected":""}>${sec.index+1} · ${Math.round(sec.width)} mm</option>`).join("")}</select></label>
       <button class="danger-btn remShelf" data-id="${s.id}" type="button">Eliminar</button>
-    </div>`).join("") || '<div class="empty-mini">No hay estantes.</div>';
+    </div>`).join("")||'<div class="empty-mini">No hay estantes.</div>';
 
-  const baseLabel = basePlacement === "inside" ? "Entre laterales" : "Sobre laterales";
-  const roofLabel = roofPlacement === "inside" ? "Entre laterales" : "Sobre laterales";
-  const baseCut = basePlacement==="inside" ? Math.max(m.W-2*m.T,0) : m.W;
-  const roofCut = roofPlacement==="inside" ? Math.max(m.W-2*m.T,0) : m.W;
-  const sideCut = Math.max(0,m.H-(basePlacement==="outside"?m.T:0)-(roofPlacement==="outside"?m.T:0));
-  $("constructionSummary").innerHTML = `
+  const eligible=spaces.filter(sp=>sp.height>=DRAWER_MIN_WALL);
+  $("drawersList").innerHTML=drawers.length?drawers.map((d,i)=>{
+    const sp=spaces.find(x=>x.id===d.spaceId)||eligible[0];
+    if(!sp)return "";
+    const guideOptions=guideList.length
+      ? `<option value="">Seleccionar guía...</option>${guideList.map(g=>`<option value="${g.guideSystem}|${g.id}" ${g.id===d.guideId?"selected":""}>${g.name} · ${g.guideSystem==="telescopica"?"Telescópica":"Guía Z"}</option>`).join("")}`
+      : `<option value="z|">Guía Z</option><option value="telescopica|">Guía telescópica</option>`;
+    return `<div class="drawer-card">
+      <div class="drawer-grid">
+        <label>Espacio<select class="drawer-space" data-id="${d.id}">${eligible.map(x=>`<option value="${x.id}" ${x.id===d.spaceId?"selected":""}>${x.label}</option>`).join("")}</select></label>
+        <label>Alto caja<div class="input-with-unit"><input class="drawer-height" data-id="${d.id}" type="number" min="${DRAWER_MIN_WALL}" max="${Math.max(sp.height,DRAWER_MIN_WALL)}" value="${Math.round(d.boxHeight||DRAWER_MIN_WALL)}"><span>mm</span></div></label>
+        <label>Profundidad<div class="input-with-unit"><input class="drawer-depth" data-id="${d.id}" type="number" min="50" max="${m.D}" value="${Math.round(d.depth||m.D)}"><span>mm</span></div></label>
+        <label>Guía<select class="drawer-guide" data-id="${d.id}">${guideOptions}</select></label>
+        <label>Frente<select class="drawer-front-mode" data-id="${d.id}">
+          <option value="inside" ${d.frontMode!=="outside"?"selected":""}>Dentro del espacio</option>
+          <option value="outside" ${d.frontMode==="outside"?"selected":""}>Delante del mueble</option>
+        </select></label>
+        <button class="danger-btn remDrawer" data-id="${d.id}" type="button">Eliminar</button>
+      </div>
+      <div class="drawer-meta">
+        <div class="summary-line"><b>Ancho espacio:</b> ${Math.round(sp.width)} mm</div>
+        <div class="summary-line"><b>Ancho caja:</b> ${Math.max(0,Math.round(sp.width-(d.guideSystem==="telescopica"?26:25)))} mm</div>
+        <div class="summary-line"><b>Paredes mín.:</b> ${DRAWER_MIN_WALL} mm</div>
+        <div class="summary-line"><b>Frente:</b> ${d.frontMode==="outside"?`${Math.max(0,Math.round(sp.width+10))} × ${Math.max(0,Math.round(sp.height+10))} mm`:`${Math.max(0,Math.round(sp.width-6))} × ${Math.max(0,Math.round(sp.height-6))} mm`}</div>
+      </div>
+    </div>`;
+  }).join(""):'<div class="empty-mini">No hay cajones. Agregá uno para usar un espacio libre de al menos 80 mm.</div>';
+
+  const baseLabel=basePlacement==="inside"?"Entre laterales":"Sobre laterales";
+  const roofLabel=roofPlacement==="inside"?"Entre laterales":"Sobre laterales";
+  const baseCut=basePlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
+  const roofCut=roofPlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
+  const sideCut=Math.max(0,m.H-(basePlacement==="outside"?m.T:0)-(roofPlacement==="outside"?m.T:0));
+  $("constructionSummary").innerHTML=`
     <div class="summary-line"><b>Base:</b> ${baseLabel} · ancho de corte <b>${baseCut.toFixed(0)} mm</b></div>
     <div class="summary-line"><b>Tapa:</b> ${roofLabel} · ancho de corte <b>${roofCut.toFixed(0)} mm</b></div>
     <div class="summary-line"><b>Laterales:</b> altura de corte <b>${sideCut.toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Divisiones / estantes:</b> ancho de estantes calculado automáticamente según el espacio libre entre verticales · espesor <b>${m.T} mm</b></div>`;
+    <div class="summary-line"><b>Divisiones / estantes:</b> ancho calculado automáticamente según el espacio libre · espesor <b>${m.T} mm</b></div>`;
 }
 
-$("basePlacement").addEventListener("change",e=>{
-  basePlacement=e.target.value==="outside"?"outside":"inside";
+$("basePlacement").addEventListener("change",e=>{basePlacement=e.target.value==="outside"?"outside":"inside";renderComponents();updateAll();});
+$("roofPlacement").addEventListener("change",e=>{roofPlacement=e.target.value==="outside"?"outside":"inside";renderComponents();updateAll();});
+$("addDivider").addEventListener("click",()=>{const m=dims();dividers.push({id:uid(),position:Math.min(300,Math.max(m.W-3*m.T,0))});renderComponents();updateAll();});
+$("addShelf").addEventListener("click",()=>{shelves.push({id:uid(),section:0,height:300});renderComponents();updateAll();});
+$("addDrawer").addEventListener("click",()=>{
+  const data=getParts(),used=new Set(drawers.map(d=>d.spaceId)),space=data.drawerSpaces.find(sp=>sp.height>=DRAWER_MIN_WALL&&!used.has(sp.id));
+  if(!space){alert("No hay un espacio libre disponible con al menos 80 mm de altura.");return;}
+  drawers.push({id:uid(),spaceId:space.id,boxHeight:Math.min(120,space.height),depth:data.model.D,guideSystem:"z",guideId:"",frontMode:"inside"});
   renderComponents();updateAll();
 });
-$("roofPlacement").addEventListener("change",e=>{
-  roofPlacement=e.target.value==="outside"?"outside":"inside";
+$("dividersList").addEventListener("change",e=>{const el=e.target.closest(".divPos");if(!el)return;const d=dividers.find(x=>x.id===el.dataset.id);if(d)d.position=+el.value||0;renderComponents();updateAll();});
+$("dividersList").addEventListener("click",e=>{const b=e.target.closest(".remDiv");if(!b)return;dividers=dividers.filter(x=>x.id!==b.dataset.id);shelves=shelves.map(s=>({...s,section:Math.min(s.section,dividers.length)}));renderComponents();updateAll();});
+$("shelvesList").addEventListener("change",e=>{const h=e.target.closest(".shelfH"),s=e.target.closest(".shelfS");const item=(h||s)&&shelves.find(x=>x.id===(h||s).dataset.id);if(!item)return;if(h)item.height=+h.value||0;if(s)item.section=+s.value||0;renderComponents();updateAll();});
+$("shelvesList").addEventListener("click",e=>{const b=e.target.closest(".remShelf");if(!b)return;shelves=shelves.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();});
+$("drawersList").addEventListener("change",e=>{
+  const q=[e.target.closest(".drawer-space"),e.target.closest(".drawer-height"),e.target.closest(".drawer-depth"),e.target.closest(".drawer-guide"),e.target.closest(".drawer-front-mode")].find(Boolean);
+  if(!q)return;
+  const d=drawers.find(x=>x.id===q.dataset.id);if(!d)return;
+  if(e.target.closest(".drawer-space")){
+    d.spaceId=e.target.value;
+    const sp=getParts().drawerSpaces.find(x=>x.id===d.spaceId);
+    if(sp)d.boxHeight=Math.min(Math.max(Number(d.boxHeight)||DRAWER_MIN_WALL,DRAWER_MIN_WALL),sp.height);
+  }
+  if(e.target.closest(".drawer-height"))d.boxHeight=Math.max(DRAWER_MIN_WALL,+e.target.value||DRAWER_MIN_WALL);
+  if(e.target.closest(".drawer-depth"))d.depth=+e.target.value||dims().D;
+  if(e.target.closest(".drawer-guide")){
+    const [system,id]=String(e.target.value).split("|");
+    d.guideSystem=system==="telescopica"?"telescopica":"z";d.guideId=id||"";
+  }
+  if(e.target.closest(".drawer-front-mode"))d.frontMode=e.target.value==="outside"?"outside":"inside";
   renderComponents();updateAll();
 });
-
-$("addDivider").addEventListener("click",()=>{
-  const m=dims();
-  dividers.push({id:uid(),position:Math.min(300,Math.max(m.W-3*m.T,0))});
-  renderComponents();updateAll();
-});
-
-$("addShelf").addEventListener("click",()=>{
-  shelves.push({id:uid(),section:0,height:300});
-  renderComponents();updateAll();
-});
-
-$("dividersList").addEventListener("change",e=>{
-  const el=e.target.closest(".divPos");
-  if(!el)return;
-  const d=dividers.find(x=>x.id===el.dataset.id);
-  if(d)d.position=+el.value||0;
-  renderComponents();updateAll();
-});
-
-$("dividersList").addEventListener("click",e=>{
-  const b=e.target.closest(".remDiv");if(!b)return;
-  dividers=dividers.filter(x=>x.id!==b.dataset.id);
-  shelves=shelves.map(s=>({...s,section:Math.min(s.section,dividers.length)}));
-  renderComponents();updateAll();
-});
-
-$("shelvesList").addEventListener("change",e=>{
-  const h=e.target.closest(".shelfH"), s=e.target.closest(".shelfS");
-  const item=(h||s) && shelves.find(x=>x.id===(h||s).dataset.id);
-  if(!item)return;
-  if(h)item.height=+h.value||0;
-  if(s)item.section=+s.value||0;
-  renderComponents();updateAll();
-});
-
-$("shelvesList").addEventListener("click",e=>{
-  const b=e.target.closest(".remShelf");if(!b)return;
-  shelves=shelves.filter(x=>x.id!==b.dataset.id);
-  renderComponents();updateAll();
-});
-
-["width","height","depth","waste"].forEach(id=>$(id).addEventListener("input",()=>{
-  renderComponents();updateAll();
-}));
-
+$("drawersList").addEventListener("click",e=>{const b=e.target.closest(".remDrawer");if(!b)return;drawers=drawers.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();});
 // -------------------- PERSPECTIVE 3D --------------------
 
 function vertices(part){

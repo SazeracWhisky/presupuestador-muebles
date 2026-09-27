@@ -11,6 +11,7 @@
 <nav class="top-nav">
   <a class="nav-btn active" href="./index.html">1 · Cálculo de mueble</a>
   <a class="nav-btn" href="./materiales.html">2 · Base de materiales</a>
+  <a class="nav-btn" href="./accesorios.html">3 · Base de accesorios</a>
 </nav>
 
 <main class="app-shell">
@@ -65,7 +66,12 @@
       <div id="shelvesList" class="component-list"></div>
       <p class="helper">La altura se mide desde la cara superior de la base. Cada estante ocupa el módulo elegido.</p>
 
-      <div class="rule-card"><strong>Regla del proveedor</strong><p>Material cortado por pieza: mínimo <b id="ruleMin">$4.000</b> y redondeo hacia arriba a <b id="ruleRound">$1.000</b>.</p></div>
+      
+      <div class="panel-title section-gap"><div><span class="step">06</span><h3>Cajones</h3></div><button id="addDrawer" class="secondary-btn" type="button">+ Cajón</button></div>
+      <div id="drawersList" class="component-list"></div>
+      <p class="helper">Un cajón ocupa un espacio libre entre horizontales dentro de un módulo. Las paredes de la caja deben medir al menos <strong>80 mm</strong> de alto.</p>
+
+<div class="rule-card"><strong>Regla del proveedor</strong><p>Material cortado por pieza: mínimo <b id="ruleMin">$4.000</b> y redondeo hacia arriba a <b id="ruleRound">$1.000</b>.</p></div>
       <div id="modelWarning" class="warning hidden"></div>
     </aside>
 
@@ -90,7 +96,7 @@
   </div>
 
   <section class="panel budget-panel">
-    <div class="panel-title spread"><div><span class="step">05</span><h3>Despiece y costo de material cortado</h3></div><div class="muted" id="priceM2Label">—</div></div>
+    <div class="panel-title spread"><div><span class="step">07</span><h3>Despiece y costo de material cortado</h3></div><div class="muted" id="priceM2Label">—</div></div>
     <div class="table-wrap"><table><thead><tr><th>Pieza</th><th>Cant.</th><th>Medida</th><th>Área total</th><th>Costo</th></tr></thead><tbody id="partsBody"></tbody></table></div>
     <div class="budget-summary">
       <div class="summary-card"><span>Área neta</span><strong id="areaM2">—</strong></div>
@@ -102,7 +108,7 @@
   </section>
 </section>
 </main>
-<footer class="footer-note">V1.8 · Perspectiva 3D corregida · Los precios y materiales se guardan localmente en este navegador.</footer>
+<footer class="footer-note">V2.4 · Cajones y accesorios · Los precios y materiales se guardan localmente en este navegador.</footer>
 <script src="catalog.js"></script>
-<script src="app.js?v=2.1"></script>
+<script src="app.js?v=2.4"></script>
 </body></html>

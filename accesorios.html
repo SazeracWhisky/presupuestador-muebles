@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#171717">
+<title>Base de accesorios · Presupuestador</title>
+<link rel="stylesheet" href="styles.css"><link rel="manifest" href="manifest.json">
+</head>
+<body>
+<nav class="top-nav">
+  <a class="nav-btn" href="./index.html">1 · Cálculo de mueble</a>
+  <a class="nav-btn" href="./materiales.html">2 · Base de materiales</a>
+  <a class="nav-btn active" href="./accesorios.html">3 · Base de accesorios</a>
+</nav>
+<main class="app-shell">
+<section class="page">
+  <div class="page-intro">
+    <div><div class="page-kicker">CATÁLOGO</div><h2>Base de accesorios</h2><p>Cargá herrajes y accesorios para utilizarlos en los presupuestos.</p></div>
+    <div class="status-pill" id="accessoriesCount">0 accesorios</div>
+  </div>
+  <div class="materials-layout">
+    <section class="panel material-form-panel">
+      <div class="panel-title"><div><span class="step">01</span><h3>Cargar / actualizar accesorio</h3></div></div>
+      <form id="accessoryForm">
+        <label>Categoría<select id="accessoryCategory" required></select></label>
+        <label>Accesorio / modelo<input id="accessoryName" type="text" placeholder="Ej. Guía telescópica 450 mm" required></label>
+        <label id="guideSystemWrap" class="hidden">Sistema de guía
+          <select id="guideSystem"><option value="z">Guía Z</option><option value="telescopica">Guía telescópica</option></select>
+        </label>
+        <label>Unidad de precio<select id="accessoryUnit">
+          <option value="unidad">Unidad</option><option value="par">Par</option><option value="juego">Juego</option><option value="pack">Pack</option><option value="caja">Caja</option>
+        </select></label>
+        <label>Precio<div class="input-with-unit"><input id="accessoryPrice" type="number" min="0" step="100" placeholder="0" required><span>ARS</span></div></label>
+        <button class="primary-btn" type="submit">Guardar / actualizar</button>
+      </form>
+      <p class="helper form-helper">Para guías de cajones, indicá si el sistema es Guía Z o telescópico. Ese dato define el descuento de ancho del cajón.</p>
+    </section>
+    <section class="panel material-table-panel">
+      <div class="panel-title"><div><span class="step">02</span><h3>Accesorios cargados</h3></div></div>
+      <div class="table-wrap material-table">
+        <table><thead><tr><th>Categoría</th><th>Accesorio / modelo</th><th>Sistema</th><th>Unidad</th><th>Precio</th><th></th></tr></thead>
+        <tbody id="accessoriesBody"></tbody></table>
+      </div>
+      <div id="emptyAccessories" class="empty-state hidden">Todavía no hay accesorios cargados.</div>
+    </section>
+  </div>
+  <section class="panel budget-panel">
+    <div class="panel-title"><div><span class="step">03</span><h3>Categorías disponibles</h3></div></div>
+    <div class="category-chips" id="categoryList"></div>
+  </section>
+</section>
+</main>
+<footer class="footer-note">V2.4 · Los accesorios se guardan localmente en este navegador.</footer>
+<script src="catalog.js"></script><script src="accessories.js"></script>
+</body>
+</html>
