@@ -5,16 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
-  <title>Presupuestador de Muebles · V0.6</title>
+  <title>Presupuestador de Muebles · V0.7</title>
   <link rel="stylesheet" href="styles.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
-      }
-    }
-  </script>
+  
 </head>
 <body>
   <header class="app-header">
@@ -23,7 +16,7 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V0.6 · CATÁLOGO</div>
+    <div class="version-badge">V0.7 · CATÁLOGO</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -144,8 +137,29 @@
         <section class="panel material-form-panel">
           <div class="panel-title"><div><span class="step">01</span><h3>Agregar material</h3></div></div>
           <form id="materialForm" class="material-form">
-            <label>Material<select id="materialName" required></select></label>
-            <label>Grosor<select id="materialThickness" required></select></label>
+            <label>Material<select id="materialName" required>
+              <option value="" selected disabled>Seleccionar material...</option>
+              <option>Melamina Blanca Aglomerado</option>
+              <option>Melamina Blanca MDF</option>
+              <option>Melamina Color Clásico Aglomerado (Negro/Cedro)</option>
+              <option>Melamina Color Nature MDF (Cedro/Roble Dakar/Roble Americano)</option>
+              <option>MDF</option>
+              <option>Fibroplus Blanco</option>
+              <option>Fibroplus Color (Cedro/Negro)</option>
+              <option>Pino</option>
+              <option>Eucaliptu</option>
+              <option>Fenólico</option>
+              <option>Terciado Pino</option>
+              <option>Enchapado Aglomerado (Cedro/Cerejeira/Paraíso/Guatambú)</option>
+            </select></label>
+            <label>Grosor<select id="materialThickness" required>
+              <option value="" selected disabled>Seleccionar grosor...</option>
+              <option value="3">3 mm</option><option value="5">5 mm</option><option value="6">6 mm</option>
+              <option value="8">8 mm</option><option value="9">9 mm</option><option value="10">10 mm</option>
+              <option value="12">12 mm</option><option value="15">15 mm</option><option value="18">18 mm</option>
+              <option value="20">20 mm</option><option value="22">22 mm</option><option value="25">25 mm</option>
+              <option value="30">30 mm</option><option value="34">34 mm</option>
+            </select></label>
             <label>Valor por m²<div class="input-with-unit"><input id="materialPrice" type="number" min="0" step="100" placeholder="48000" required><span>ARS</span></div></label>
             <button class="primary-btn" type="submit">Agregar / actualizar precio</button>
           </form>
@@ -175,7 +189,7 @@
     </section>
   </main>
 
-  <footer class="footer-note">V0.6 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V0.7 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

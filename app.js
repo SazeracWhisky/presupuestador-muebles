@@ -1,6 +1,5 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
+let THREE = null;
+let OrbitControls = null;
 const $ = (id) => document.getElementById(id);
 const MATERIALS_KEY = 'presupuestador_materiales_v3';
 const SETTINGS_KEY = 'presupuestador_settings_v1';
@@ -65,14 +64,7 @@ if(!Number.isFinite(state.roundingUnit) || state.roundingUnit<=0) state.rounding
 if(state.materials[0]) state.selectedMaterialId=state.materials[0].id;
 
 function renderMaterialOptions(){
-  const materialSelect=$('materialName');
-  const thicknessSelect=$('materialThickness');
-  if(materialSelect){
-    materialSelect.innerHTML=MATERIAL_OPTIONS.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
-  }
-  if(thicknessSelect){
-    thicknessSelect.innerHTML=THICKNESS_OPTIONS.map(mm=>`<option value="${mm}">${mm} mm</option>`).join('');
-  }
+  // Los desplegables ya vienen con sus opciones en HTML para que funcionen aunque el visor tarde en cargar.
 }
 
 function renderMaterialCatalog(){
@@ -217,7 +209,18 @@ function updateBudget(){
 }
 
 let scene,camera,renderer,controls,modelGroup;
-function initViewer(){
+async function initViewer(){
+  try {
+    const threeMod = await import('https://unpkg.com/three@0.180.0/build/three.module.js');
+    const controlsMod = await import('https://unpkg.com/three@0.180.0/examples/jsm/controls/OrbitControls.js');
+    THREE = threeMod;
+    OrbitControls = controlsMod.OrbitControls;
+  } catch (error) {
+    console.warn('El visor 3D no pudo cargar. El cálculo y la base de materiales seguirán funcionando.', error);
+    const viewer=$('viewer');
+    if(viewer) viewer.innerHTML='<div style="height:100%;display:grid;place-items:center;padding:30px;text-align:center;color:#737373;font-size:13px">El visor 3D no pudo cargar en este momento.<br>La base de materiales y el cálculo siguen funcionando.</div>';
+    return;
+  }
   const container=$('viewer');
   scene=new THREE.Scene(); scene.background=new THREE.Color(0xf7f7f5);
   camera=new THREE.PerspectiveCamera(36,1,0.01,100);
@@ -241,7 +244,7 @@ function initViewer(){
 }
 
 function buildModel(){
-  if(!modelGroup) return;
+  if(!THREE || !modelGroup) return;
   while(modelGroup.children.length){ const o=modelGroup.children.pop(); o.traverse?.(c=>{if(c.geometry)c.geometry.dispose();if(c.material){Array.isArray(c.material)?c.material.forEach(m=>m.dispose()):c.material.dispose();}}); }
   const model=getModel(); const material=currentMaterial(); if(!model.W||!model.H||!model.D||!model.T) return;
   const woodColor=material?.name?.toLowerCase().includes('madera')?0xb88b5a:0xcfc8bd;
