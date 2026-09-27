@@ -17,45 +17,45 @@ a{text-decoration:none;color:inherit}
 .page-intro{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin:0 0 18px}
 .page-kicker{font-size:11px;letter-spacing:.2em;font-weight:900;color:#8a8983;margin-bottom:8px}
 h1,h2,h3,p{margin-top:0}
-h2{font-size:31px;line-height:1.05;margin-bottom:8px}
-h3{font-size:18px;margin:0}
+h2{font-size:29px;line-height:1.05;margin-bottom:7px}
+h3{font-size:16px;margin:0}
 .page-intro p,.viewer-head p{color:var(--muted);margin:0}
 .status-pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 15px;font-size:13px;font-weight:800;white-space:nowrap}
-.calculator-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px;align-items:stretch}
+.calculator-layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:stretch}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 5px 18px rgba(0,0,0,.035)}
-.controls-panel{padding:20px}
+.controls-panel{padding:16px}
 .viewer-panel{padding:18px}
 .panel-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px}
 .panel-title>div{display:flex;align-items:center;gap:11px}
 .step{width:29px;height:29px;border-radius:9px;background:#171717;color:#fff;display:inline-grid;place-items:center;font-size:12px;font-weight:900}
-label{display:block;font-weight:800;font-size:13px;color:#50504c;margin-bottom:13px}
-input,select{width:100%;border:1px solid #d6d6d1;background:#fff;border-radius:11px;padding:11px 12px;margin-top:7px;outline:none;color:#171717}
+label{display:block;font-weight:800;font-size:12px;color:#50504c;margin-bottom:9px}
+input,select{width:100%;border:1px solid #d6d6d1;background:#fff;border-radius:10px;padding:8px 10px;margin-top:5px;outline:none;color:#171717}
 input:focus,select:focus{border-color:#777;box-shadow:0 0 0 3px rgba(0,0,0,.05)}
 input[type=number]{appearance:textfield}
-.unit{display:block;color:#878780;font-size:11px;font-weight:700;margin-top:5px}
-.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
-.section-gap{margin-top:22px}
-.secondary-btn,.primary-btn,.danger-btn{border:1px solid #d5d5d0;border-radius:11px;padding:10px 13px;font-weight:800;cursor:pointer}
-.secondary-btn{background:#ecece9;color:#4c4c48}
+.unit{display:block;color:#878780;font-size:10px;font-weight:700;margin-top:3px}
+.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}
+.section-gap{margin-top:16px}
+.secondary-btn,.primary-btn,.danger-btn{border:1px solid #d5d5d0;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}
+.secondary-btn{background:#ecece9;color:#4c4c48;font-size:12px}
 .primary-btn{background:#171717;color:#fff;border-color:#171717;width:100%}
-.danger-btn{background:#fff;color:#7b2e27;border-color:#e1c5c1;font-size:12px}
-.component-list{display:grid;gap:8px}
-.component-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fafaf8;align-items:end}
-.shelf-row{grid-template-columns:minmax(0,1fr) 140px auto}
+.danger-btn{background:#fff;color:#7b2e27;border-color:#e1c5c1;font-size:11px;padding:7px 9px}
+.component-list{display:grid;gap:6px}
+.component-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:8px;border:1px solid var(--line);border-radius:11px;background:#fafaf8;align-items:end}
+.shelf-row{grid-template-columns:78px minmax(0,1fr) 70px;gap:6px;align-items:end}
 .component-row label{margin:0}
-.helper{font-size:11px;line-height:1.45;color:#777;margin:7px 0 0}
-.rule-card{margin-top:18px;padding:12px 13px;border:1px solid var(--line);border-radius:13px;background:#fafaf8;color:#60605b;font-size:12px;line-height:1.45}
+.helper{font-size:10px;line-height:1.4;color:#777;margin:5px 0 0}
+.rule-card{margin-top:14px;padding:10px 11px;border:1px solid var(--line);border-radius:12px;background:#fafaf8;color:#60605b;font-size:11px;line-height:1.38}
 .rule-card strong{display:block;color:#222;margin-bottom:4px}
 .warning{margin-top:12px;background:#fff8e8;border:1px solid #ead3a0;color:var(--warn);padding:10px 12px;border-radius:11px;font-size:12px}
-.selected-material-card{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}
-.construction-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.selected-material-card{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:5px}
+.construction-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .construction-summary{display:grid;gap:6px;margin-top:2px}
-.construction-summary .summary-line{padding:9px 10px;background:#fafaf8;border:1px solid var(--line);border-radius:10px;font-size:11px;color:#666}
+.construction-summary .summary-line{padding:7px 8px;background:#fafaf8;border:1px solid var(--line);border-radius:9px;font-size:10px;color:#666}
 .construction-summary .summary-line b{color:#222}
 
-.selected-material-card>div{background:#f6f6f3;border:1px solid #e1e1dc;border-radius:11px;padding:10px}
-.selected-material-card span,.dimension-card span,.summary-card span,.viewer-overlay span{display:block;text-transform:uppercase;letter-spacing:.13em;color:#7e7e78;font-weight:900;font-size:9px}
-.selected-material-card strong{display:block;font-size:15px;margin-top:4px}
+.selected-material-card>div{background:#f6f6f3;border:1px solid #e1e1dc;border-radius:10px;padding:8px}
+.selected-material-card span,.dimension-card span,.summary-card span,.viewer-overlay span{display:block;text-transform:uppercase;letter-spacing:.12em;color:#7e7e78;font-weight:900;font-size:8px}
+.selected-material-card strong{display:block;font-size:13px;margin-top:3px}
 .hidden{display:none !important}
 .viewer-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin:2px 4px 14px}
 .viewer-head h3{font-size:19px;margin-bottom:4px}
@@ -105,4 +105,18 @@ th{font-size:10px;color:#85857f;text-transform:uppercase;letter-spacing:.08em}
  .shelf-row{grid-template-columns:1fr}.component-row{grid-template-columns:1fr}
  .viewer-wrap{height:430px}
  .viewer-help{display:none}
+}
+
+/* V2.2 · Densidad de controles de estantes */
+.shelf-row label:first-child{min-width:0}
+.shelf-row label:first-child .input-with-unit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;align-items:center}
+.shelf-row label:first-child .input-with-unit input{min-width:0}
+.shelf-row label:first-child .input-with-unit span{white-space:nowrap}
+.shelf-row label:nth-child(2){min-width:0}
+.shelf-row label:nth-child(2) select{min-width:0}
+@media(max-width:1050px){
+  .calculator-layout,.materials-layout{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .shelf-row{grid-template-columns:70px minmax(0,1fr) 64px}
 }
