@@ -1,6 +1,5 @@
-V1.7
-Cálculo de mueble + Base de materiales independiente.
-Visor 3D Canvas con cámara perspectiva y órbita completa.
-Arrastre: orbitar. Shift + arrastre: desplazar. Rueda/pinch: zoom.
-Texturas procedurales para maderas y superficies mate.
+V1.8
+Corrección de escala de cámara perspectiva para evitar que el modelo llene el visor.
+Órbita completa estable, zoom y paneo.
+Texturas procedurales y espesor proporcional.
 Sin dependencias externas para el visor.
