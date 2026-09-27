@@ -2,38 +2,65 @@
   'use strict';
 
   const KEY = 'presupuestador_materiales_v3';
-  const THICKNESS = [3, 5, 6, 8, 9, 10, 12, 15, 18, 20, 22, 25, 30, 34];
+  const THICKNESS_ALL = [3, 5, 6, 8, 9, 10, 12, 15, 18, 20, 22, 25, 30, 34];
 
+  // Catálogo maestro definido según la disponibilidad indicada por el usuario.
+  // Enchapado Aglomerado queda con grosor pendiente de definir porque no se indicó
+  // una lista de espesores todavía.
   const CATALOG = [
     {
       id: 'melamina_aglomerado',
       label: 'Melamina Aglomerado',
-      materials: [
-        { id: 'blanca', label: 'Melamina Blanca', variants: [] },
-        { id: 'color_clasico', label: 'Melamina Color Clásico', variants: ['Negro', 'Cedro'] }
-      ]
+      variants: ['Blanco', 'Negro', 'Cedro'],
+      thicknesses: [10, 12, 15, 18]
     },
     {
       id: 'melamina_mdf',
       label: 'Melamina MDF',
-      materials: [
-        { id: 'blanca', label: 'Melamina Blanca', variants: [] },
-        { id: 'color_nature', label: 'Melamina Color Nature', variants: ['Cedro', 'Roble Dakar', 'Roble Americano'] }
-      ]
+      variants: ['Blanco', 'Cedro', 'Roble Americano', 'Roble Dakar'],
+      thicknesses: [12, 15, 18]
     },
     {
-      id: 'otros',
-      label: 'Otros materiales',
-      materials: [
-        { id: 'mdf', label: 'MDF', variants: [] },
-        { id: 'fibroplus_blanco', label: 'Fibroplus Blanco', variants: [] },
-        { id: 'fibroplus_color', label: 'Fibroplus Color', variants: ['Cedro', 'Negro'] },
-        { id: 'pino', label: 'Pino', variants: [] },
-        { id: 'eucaliptu', label: 'Eucaliptu', variants: [] },
-        { id: 'fenolico', label: 'Fenólico', variants: [] },
-        { id: 'terciado_pino', label: 'Terciado Pino', variants: [] },
-        { id: 'enchapado_aglomerado', label: 'Enchapado Aglomerado', variants: ['Cedro', 'Cerejeira', 'Paraíso', 'Guatambú'] }
-      ]
+      id: 'mdf',
+      label: 'MDF',
+      variants: [],
+      thicknesses: [3, 5, 9, 12, 15, 18, 25]
+    },
+    {
+      id: 'fibroplus',
+      label: 'Fibroplus',
+      variants: ['Blanco', 'Negro', 'Cedro'],
+      thicknesses: [3, 5]
+    },
+    {
+      id: 'pino',
+      label: 'Pino',
+      variants: [],
+      thicknesses: [18, 22]
+    },
+    {
+      id: 'eucaliptu',
+      label: 'Eucaliptu',
+      variants: [],
+      thicknesses: [20, 30]
+    },
+    {
+      id: 'fenolico',
+      label: 'Fenólico',
+      variants: [],
+      thicknesses: [6, 8, 10, 12, 15, 18]
+    },
+    {
+      id: 'terciado_pino',
+      label: 'Terciado Pino',
+      variants: [],
+      thicknesses: [3]
+    },
+    {
+      id: 'enchapado_aglomerado',
+      label: 'Enchapado Aglomerado',
+      variants: ['Cedro', 'Cerejeira', 'Paraíso', 'Guatambú'],
+      thicknesses: null
     }
   ];
 
@@ -41,132 +68,184 @@
   const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const esc = v => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
-  function findDefinition(categoryId, materialId) {
-    const category = CATALOG.find(c => c.id === categoryId);
-    const material = category?.materials.find(m => m.id === materialId);
-    return { category, material };
+  function findMaterial(id) {
+    return CATALOG.find(m => m.id === id) || null;
   }
 
-  function buildName(categoryId, materialId, variant) {
-    const { category, material } = findDefinition(categoryId, materialId);
-    if (!category || !material) return '';
-    const suffix = variant ? ` · ${variant}` : '';
-    return `${category.label} · ${material.label}${suffix}`;
+  function buildName(materialId, variant = '') {
+    const material = findMaterial(materialId);
+    if (!material) return '';
+    return variant ? `${material.label} · ${variant}` : material.label;
   }
 
-  function inferRecord(raw) {
+  function migrateOldRecord(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const oldName = String(raw.name || '').trim();
-    if (!oldName) return null;
+    const oldThickness = Number(raw.thickness);
+    const price = Number(raw.price);
 
-    // Prefer already-structured records.
-    if (raw.categoryId && raw.materialId) {
-      const { category, material } = findDefinition(raw.categoryId, raw.materialId);
-      if (category && material) {
-        const variant = material.variants.includes(raw.variant) ? raw.variant : '';
-        return { ...raw, categoryId: category.id, materialId: material.id, variant, name: buildName(category.id, material.id, variant) };
+    // Already migrated / canonical record.
+    if (raw.materialId && findMaterial(raw.materialId)) {
+      const material = findMaterial(raw.materialId);
+      const variant = material.variants.includes(raw.variant) ? raw.variant : '';
+      return {
+        id: raw.id || makeId(),
+        materialId: material.id,
+        variant,
+        name: buildName(material.id, variant),
+        thickness: Number.isFinite(oldThickness) && material.thicknesses?.includes(oldThickness) ? oldThickness : (material.thicknesses?.[0] ?? null),
+        price: Number.isFinite(price) ? price : 0
+      };
+    }
+
+    // Compatibility with V1.0 structured records.
+    const oldCategory = String(raw.categoryId || '');
+    const oldMaterialId = String(raw.materialId || '');
+    if (oldCategory === 'melamina_aglomerado') {
+      const variant = oldMaterialId === 'blanca' ? 'Blanco' : oldMaterialId === 'color_clasico' ? (String(oldName).includes('Negro') ? 'Negro' : String(oldName).includes('Cedro') ? 'Cedro' : '') : '';
+      return { id: raw.id || makeId(), materialId: 'melamina_aglomerado', variant, name: buildName('melamina_aglomerado', variant), thickness: Number.isFinite(oldThickness) ? oldThickness : null, price: Number.isFinite(price) ? price : 0 };
+    }
+    if (oldCategory === 'melamina_mdf') {
+      const variant = oldMaterialId === 'blanca' ? 'Blanco' : oldMaterialId === 'color_nature' ? (String(oldName).includes('Cedro') ? 'Cedro' : String(oldName).includes('Roble Dakar') ? 'Roble Dakar' : String(oldName).includes('Roble Americano') ? 'Roble Americano' : '') : '';
+      return { id: raw.id || makeId(), materialId: 'melamina_mdf', variant, name: buildName('melamina_mdf', variant), thickness: Number.isFinite(oldThickness) ? oldThickness : null, price: Number.isFinite(price) ? price : 0 };
+    }
+    if (oldCategory === 'otros') {
+      const map = {
+        mdf: 'mdf',
+        fibroplus_blanco: 'fibroplus',
+        fibroplus_color: 'fibroplus',
+        pino: 'pino',
+        eucaliptu: 'eucaliptu',
+        fenolico: 'fenolico',
+        terciado_pino: 'terciado_pino',
+        enchapado_aglomerado: 'enchapado_aglomerado'
+      };
+      const materialId = map[oldMaterialId];
+      if (materialId) {
+        let variant = '';
+        if (oldMaterialId === 'fibroplus_blanco') variant = 'Blanco';
+        if (oldMaterialId === 'fibroplus_color') variant = String(oldName).includes('Negro') ? 'Negro' : String(oldName).includes('Cedro') ? 'Cedro' : '';
+        if (oldMaterialId === 'enchapado_aglomerado') {
+          variant = ['Cedro','Cerejeira','Paraíso','Guatambú'].find(v => String(oldName).includes(v)) || '';
+        }
+        return { id: raw.id || makeId(), materialId, variant, name: buildName(materialId, variant), thickness: Number.isFinite(oldThickness) ? oldThickness : null, price: Number.isFinite(price) ? price : 0 };
       }
     }
 
-    // Compatibility with the earlier flat catalog names.
-    let categoryId = 'otros';
-    let materialId = '';
-    let variant = '';
+    // Compatibility with older flat names.
+    const flatMap = [
+      ['Melamina Blanca Aglomerado', 'melamina_aglomerado', 'Blanco'],
+      ['Melamina Blanca MDF', 'melamina_mdf', 'Blanco'],
+      ['Melamina Color Clásico Aglomerado', 'melamina_aglomerado', ''],
+      ['Melamina Color Nature MDF', 'melamina_mdf', ''],
+      ['MDF', 'mdf', ''],
+      ['Fibroplus Blanco', 'fibroplus', 'Blanco'],
+      ['Fibroplus Color', 'fibroplus', ''],
+      ['Pino', 'pino', ''],
+      ['Eucaliptu', 'eucaliptu', ''],
+      ['Fenólico', 'fenolico', ''],
+      ['Terciado Pino', 'terciado_pino', ''],
+      ['Enchapado Aglomerado', 'enchapado_aglomerado', '']
+    ];
+    const match = flatMap.find(([prefix]) => oldName === prefix || oldName.startsWith(`${prefix} (`) || oldName.startsWith(`${prefix} ·`));
+    if (!match) return null;
 
-    if (/^Melamina Blanca Aglomerado$/i.test(oldName)) {
-      categoryId = 'melamina_aglomerado'; materialId = 'blanca';
-    } else if (/^Melamina Blanca MDF$/i.test(oldName)) {
-      categoryId = 'melamina_mdf'; materialId = 'blanca';
-    } else if (/^Melamina Color Clásico Aglomerado \((.+)\)$/i.test(oldName)) {
-      categoryId = 'melamina_aglomerado'; materialId = 'color_clasico';
-      variant = oldName.match(/\((.+)\)/i)?.[1]?.split('/')?.[0] || '';
-      if (!['Negro', 'Cedro'].includes(variant) && oldName.includes('Cedro')) variant = 'Cedro';
-    } else if (/^Melamina Color Nature MDF \((.+)\)$/i.test(oldName)) {
-      categoryId = 'melamina_mdf'; materialId = 'color_nature';
-      variant = oldName.match(/\((.+)\)/i)?.[1]?.split('/')?.[0] || '';
-      if (!['Cedro', 'Roble Dakar', 'Roble Americano'].includes(variant)) variant = '';
-    } else if (/^Fibroplus Color \((.+)\)$/i.test(oldName)) {
-      materialId = 'fibroplus_color';
-      variant = oldName.match(/\((.+)\)/i)?.[1]?.split('/')?.[0] || '';
-      if (!['Cedro', 'Negro'].includes(variant)) variant = '';
-    } else if (/^Enchapado Aglomerado \((.+)\)$/i.test(oldName)) {
-      materialId = 'enchapado_aglomerado';
-      variant = oldName.match(/\((.+)\)/i)?.[1]?.split('/')?.[0] || '';
-      if (!['Cedro', 'Cerejeira', 'Paraíso', 'Guatambú'].includes(variant)) variant = '';
-    } else {
-      const map = {
-        'MDF': 'mdf',
-        'Fibroplus Blanco': 'fibroplus_blanco',
-        'Pino': 'pino',
-        'Eucaliptu': 'eucaliptu',
-        'Fenólico': 'fenolico',
-        'Terciado Pino': 'terciado_pino'
-      };
-      materialId = map[oldName] || '';
-    }
+    let [, materialId, variant] = match;
+    const candidates = findMaterial(materialId)?.variants || [];
+    const foundVariant = candidates.find(v => oldName.includes(v));
+    if (foundVariant) variant = foundVariant;
 
-    if (!materialId) return { ...raw };
-    const { category, material } = findDefinition(categoryId, materialId);
-    if (!category || !material) return { ...raw };
-    if (material.variants.length && !material.variants.includes(variant)) variant = '';
-    return { ...raw, categoryId, materialId, variant, name: buildName(categoryId, materialId, variant) };
+    return { id: raw.id || makeId(), materialId, variant, name: buildName(materialId, variant), thickness: Number.isFinite(oldThickness) ? oldThickness : null, price: Number.isFinite(price) ? price : 0 };
+  }
+
+  function dedupe(items) {
+    const map = new Map();
+    items.forEach(item => {
+      if (!item || !findMaterial(item.materialId)) return;
+      const thicknessKey = item.thickness == null ? 'none' : Number(item.thickness);
+      const key = `${item.materialId}||${item.variant || ''}||${thicknessKey}`;
+      map.set(key, { ...item, name: buildName(item.materialId, item.variant || '') });
+    });
+    return Array.from(map.values());
   }
 
   function safeLoad() {
-    try {
-      const current = JSON.parse(localStorage.getItem(KEY));
-      if (Array.isArray(current) && current.length) return current.map(inferRecord).filter(Boolean);
-      const old = JSON.parse(localStorage.getItem('presupuestador_materiales_v2'));
-      if (Array.isArray(old) && old.length) return old.map(inferRecord).filter(Boolean);
-      const old1 = JSON.parse(localStorage.getItem('presupuestador_materiales_v1'));
-      if (Array.isArray(old1) && old1.length) return old1.map(inferRecord).filter(Boolean);
-    } catch (_) {}
-    return [{ id: makeId(), categoryId: 'otros', materialId: 'mdf', variant: '', name: buildName('otros', 'mdf', ''), thickness: 15, price: 48000 }];
+    const keys = [KEY, 'presupuestador_materiales_v2', 'presupuestador_materiales_v1'];
+    for (const key of keys) {
+      try {
+        const raw = JSON.parse(localStorage.getItem(key));
+        if (Array.isArray(raw) && raw.length) {
+          const migrated = dedupe(raw.map(migrateOldRecord).filter(Boolean));
+          if (migrated.length) return migrated;
+        }
+      } catch (_) {}
+    }
+
+    // Base inicial solicitada previamente.
+    return [{
+      id: makeId(),
+      materialId: 'mdf',
+      variant: '',
+      name: 'MDF',
+      thickness: 15,
+      price: 48000
+    }];
   }
 
   let items = safeLoad();
   localStorage.setItem(KEY, JSON.stringify(items));
   const save = () => localStorage.setItem(KEY, JSON.stringify(items));
 
-  function populateCategorySelect() {
-    const category = $('materialCategory');
-    if (!category) return;
-    category.replaceChildren(new Option('Seleccionar categoría...', '', true, true));
-    CATALOG.forEach(c => category.add(new Option(c.label, c.id)));
+  function populateMaterialFamilySelect(selected = '') {
+    const select = $('materialCategory');
+    if (!select) return;
+    select.replaceChildren(new Option('Seleccionar material...', '', true, !selected));
+    CATALOG.forEach(material => select.add(new Option(material.label, material.id)));
+    if (selected) select.value = selected;
   }
 
-  function populateMaterialSelect() {
-    const categoryId = $('materialCategory')?.value || '';
-    const material = $('materialName');
-    const variant = $('materialVariant');
-    if (!material) return;
-    material.replaceChildren(new Option(categoryId ? 'Seleccionar material...' : 'Seleccioná una categoría primero', '', true, true));
-    const category = CATALOG.find(c => c.id === categoryId);
-    (category?.materials || []).forEach(m => material.add(new Option(m.label, m.id)));
-    if (variant) {
-      variant.replaceChildren(new Option('Sin variante', ''));
-      variant.disabled = true;
-      variant.closest('label')?.classList.add('hidden');
+  function populateVariantSelect(selected = '') {
+    const material = findMaterial($('materialCategory')?.value || '');
+    const label = $('materialVariant')?.closest('label');
+    const select = $('materialVariant');
+    if (!select) return;
+    if (!material?.variants?.length) {
+      select.replaceChildren(new Option('Sin variante', ''));
+      select.value = '';
+      select.disabled = true;
+      label?.classList.add('hidden');
+      return;
     }
+    select.replaceChildren(new Option('Seleccionar color...', '', true, !selected));
+    material.variants.forEach(v => select.add(new Option(v, v)));
+    if (selected) select.value = selected;
+    select.disabled = false;
+    label?.classList.remove('hidden');
   }
 
-  function populateVariantSelect() {
-    const categoryId = $('materialCategory')?.value || '';
-    const materialId = $('materialName')?.value || '';
-    const variant = $('materialVariant');
-    if (!variant) return;
-    const { material } = findDefinition(categoryId, materialId);
-    variant.replaceChildren(new Option(material?.variants.length ? 'Seleccionar variante...' : 'Sin variante', ''));
-    (material?.variants || []).forEach(v => variant.add(new Option(v, v)));
-    variant.disabled = !(material?.variants?.length);
-    variant.closest('label')?.classList.toggle('hidden', !(material?.variants?.length));
-  }
-
-  function populateThicknessSelect() {
-    const thickness = $('materialThickness');
-    if (!thickness) return;
-    thickness.replaceChildren(new Option('Seleccionar grosor...', '', true, true));
-    THICKNESS.forEach(mm => thickness.add(new Option(`${mm} mm`, String(mm))));
+  function populateThicknessSelect(selected = '') {
+    const material = findMaterial($('materialCategory')?.value || '');
+    const select = $('materialThickness');
+    const helper = $('thicknessHelper');
+    if (!select) return;
+    select.replaceChildren();
+    if (!material) {
+      select.add(new Option('Seleccioná un material primero', '', true, true));
+      select.disabled = true;
+      if (helper) helper.textContent = 'Los grosores se filtran según el material elegido.';
+      return;
+    }
+    if (!Array.isArray(material.thicknesses)) {
+      select.add(new Option('Grosor pendiente de definir', '', true, true));
+      select.disabled = true;
+      if (helper) helper.textContent = 'Todavía no se cargaron los grosores disponibles para este material.';
+      return;
+    }
+    select.add(new Option('Seleccionar grosor...', '', true, !selected));
+    material.thicknesses.forEach(mm => select.add(new Option(`${mm} mm`, String(mm))));
+    if (selected) select.value = String(selected);
+    select.disabled = false;
+    if (helper) helper.textContent = `Disponibles: ${material.thicknesses.join(', ')} mm.`;
   }
 
   function renderTable() {
@@ -174,14 +253,17 @@
     const count = $('materialsCount');
     const empty = $('emptyMaterials');
     if (!body || !count || !empty) return;
+
     body.innerHTML = items.map(m => `
       <tr>
-        <td><strong>${esc(m.categoryId === 'otros' ? 'Otros materiales' : (CATALOG.find(c => c.id === m.categoryId)?.label || ''))}</strong><br><span class="muted">${esc(m.name)}</span></td>
-        <td>${Number(m.thickness)} mm</td>
-        <td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${esc(m.id)}" type="number" min="0" step="100" value="${Number(m.price)||0}" aria-label="Precio por m²"><span>ARS</span></div></td>
+        <td><strong>${esc(findMaterial(m.materialId)?.label || m.name)}</strong></td>
+        <td>${m.variant ? esc(m.variant) : '<span class="muted">—</span>'}</td>
+        <td>${m.thickness == null ? '<span class="muted">Pendiente</span>' : `${Number(m.thickness)} mm`}</td>
+        <td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${esc(m.id)}" type="number" min="0" step="100" value="${Number(m.price) || 0}" aria-label="Precio por m²"><span>ARS</span></div></td>
         <td><button type="button" class="danger-btn delete-material" data-id="${esc(m.id)}">Eliminar</button></td>
       </tr>`).join('');
-    count.textContent = `${items.length} ${items.length === 1 ? 'material' : 'materiales'}`;
+
+    count.textContent = `${items.length} ${items.length === 1 ? 'registro' : 'registros'}`;
     empty.classList.toggle('hidden', items.length > 0);
   }
 
@@ -190,35 +272,47 @@
   }
 
   function init() {
-    populateCategorySelect();
-    populateMaterialSelect();
+    populateMaterialFamilySelect();
     populateVariantSelect();
     populateThicknessSelect();
     renderTable();
 
     $('materialCategory')?.addEventListener('change', () => {
-      populateMaterialSelect();
       populateVariantSelect();
+      populateThicknessSelect();
     });
 
-    $('materialName')?.addEventListener('change', populateVariantSelect);
+    $('materialVariant')?.addEventListener('change', () => {
+      // El grosor disponible no depende del color en el catálogo actual,
+      // pero conservamos esta actualización para futuras reglas por variante.
+      populateThicknessSelect($('materialThickness')?.value || '');
+    });
 
     $('materialForm')?.addEventListener('submit', e => {
       e.preventDefault();
-      const categoryId = $('materialCategory')?.value || '';
-      const materialId = $('materialName')?.value || '';
+
+      const materialId = $('materialCategory')?.value || '';
       const variant = $('materialVariant')?.disabled ? '' : ($('materialVariant')?.value || '');
-      const thickness = Number($('materialThickness')?.value || 0);
+      const thicknessRaw = $('materialThickness')?.value || '';
+      const thickness = thicknessRaw === '' ? null : Number(thicknessRaw);
       const rawPrice = $('materialPrice')?.value ?? '';
       const price = Number(rawPrice);
-      const { category, material } = findDefinition(categoryId, materialId);
+      const material = findMaterial(materialId);
 
-      if (!category || !material || !THICKNESS.includes(thickness)) {
-        alert('Seleccioná una categoría, un material y un grosor.');
+      if (!material) {
+        alert('Seleccioná un material.');
         return;
       }
       if (material.variants.length && !material.variants.includes(variant)) {
-        alert('Seleccioná una variante.');
+        alert('Seleccioná un color / variante.');
+        return;
+      }
+      if (!Array.isArray(material.thicknesses)) {
+        alert('Todavía necesitamos definir los grosores disponibles para este material.');
+        return;
+      }
+      if (!material.thicknesses.includes(thickness)) {
+        alert('Seleccioná un grosor disponible para este material.');
         return;
       }
       if (rawPrice === '' || !Number.isFinite(price) || price < 0) {
@@ -227,20 +321,20 @@
         return;
       }
 
-      const name = buildName(categoryId, materialId, variant);
-      const existing = items.find(m => m.categoryId === categoryId && m.materialId === materialId && (m.variant || '') === variant && Number(m.thickness) === thickness);
-      if (existing) existing.price = price;
-      else items.push({ id: makeId(), categoryId, materialId, variant, name, thickness, price });
+      const name = buildName(materialId, variant);
+      const existing = items.find(m => m.materialId === materialId && (m.variant || '') === variant && Number(m.thickness) === thickness);
+      if (existing) {
+        existing.price = price;
+        existing.name = name;
+      } else {
+        items.push({ id: makeId(), materialId, variant, name, thickness, price });
+      }
 
+      items = dedupe(items);
       save();
       renderTable();
       notify();
-      $('materialForm')?.reset();
-      populateCategorySelect();
-      populateMaterialSelect();
-      populateVariantSelect();
-      populateThicknessSelect();
-      if ($('materialPrice')) $('materialPrice').value = '';
+      $('materialPrice').value = '';
     });
 
     $('materialsBody')?.addEventListener('input', e => {

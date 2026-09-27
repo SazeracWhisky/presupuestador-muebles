@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
-  <title>Presupuestador de Muebles · V1.0</title>
+  <title>Presupuestador de Muebles · V1.1</title>
   <link rel="stylesheet" href="styles.css" />
   
 </head>
@@ -16,7 +16,7 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V1.0 · CATÁLOGO</div>
+    <div class="version-badge">V1.1 · CATÁLOGO</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -137,21 +137,21 @@
         <section class="panel material-form-panel">
           <div class="panel-title"><div><span class="step">01</span><h3>Agregar material</h3></div></div>
           <form id="materialForm" class="material-form">
-            <label>Categoría<select id="materialCategory" required></select></label>
-            <label>Material / línea<select id="materialName" required></select></label>
-            <label>Variante / color<select id="materialVariant"></select></label>
+            <label>Material<select id="materialCategory" required></select></label>
+            <label>Color / variante<select id="materialVariant"></select></label>
             <label>Grosor<select id="materialThickness" required></select></label>
+            <div id="thicknessHelper" class="catalog-availability">Los grosores se filtran según el material elegido.</div>
             <label>Valor por m²<div class="input-with-unit"><input id="materialPrice" type="number" min="0" step="100" placeholder="48000" required><span>ARS</span></div></label>
             <button class="primary-btn" type="submit">Agregar / actualizar precio</button>
           </form>
-          <p class="helper form-helper">Elegí la categoría, luego el material o línea y, cuando corresponda, la variante o color. Después seleccioná el grosor y cargá únicamente el precio actual por m². Si ya existe esa combinación, se actualizará su precio.</p>
+          <p class="helper form-helper">Seleccioná el material, el color cuando corresponda y un grosor disponible. Después escribí únicamente el precio por m². Si ya existe esa combinación, se actualizará su precio.</p>
         </section>
 
         <section class="panel material-table-panel">
           <div class="panel-title"><div><span class="step">02</span><h3>Materiales cargados</h3></div></div>
           <div class="table-wrap material-table">
             <table>
-              <thead><tr><th>Material</th><th>Grosor</th><th>Precio / m²</th><th></th></tr></thead>
+              <thead><tr><th>Material</th><th>Color / variante</th><th>Grosor</th><th>Precio / m²</th><th></th></tr></thead>
               <tbody id="materialsBody"></tbody>
             </table>
           </div>
@@ -170,7 +170,7 @@
     </section>
   </main>
 
-  <footer class="footer-note">V1.0 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V1.1 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script>
     // Navegación de respaldo: funciona aunque algún módulo externo falle al cargar.
     function showPage(pageId, button) {

@@ -68,23 +68,20 @@ function renderMaterialOptions(){
 }
 
 function renderMaterialCatalog(){
-  renderMaterialOptions();
   const select=$('materialSelect');
-  select.innerHTML=state.materials.length ? state.materials.map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} · ${m.thickness} mm</option>`).join('') : '<option value="">No hay materiales cargados</option>';
-  if(!state.materials.some(m=>m.id===state.selectedMaterialId)) state.selectedMaterialId=state.materials[0]?.id || '';
-  if(state.selectedMaterialId) select.value=state.selectedMaterialId;
-  const body=$('materialsBody');
-  body.innerHTML=state.materials.map(m=>`<tr>
-    <td>${escapeHtml(m.name)}</td>
-    <td>${m.thickness} mm</td>
-    <td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${escapeHtml(m.id)}" type="number" min="0" step="100" value="${m.price}" aria-label="Precio por m²" /></div></td>
-    <td><button class="danger-btn delete-material" data-id="${escapeHtml(m.id)}">Eliminar</button></td>
-  </tr>`).join('');
-  $('materialsCount').textContent=`${state.materials.length} ${state.materials.length===1?'material':'materiales'}`;
-  $('emptyMaterials').classList.toggle('hidden', state.materials.length>0);
-  $('minimumPieceCost').value=state.minimumPieceCost;
-  $('roundingUnit').value=state.roundingUnit;
+  if (!select) return;
+  const previous=select.value || state.selectedMaterialId;
+  select.innerHTML=state.materials.length
+    ? state.materials.map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} · ${m.thickness ?? '—'} mm · ${money(Number(m.price)||0)}/m²</option>`).join('')
+    : '<option value="">No hay materiales cargados</option>';
+  const next=state.materials.find(m=>m.id===previous)?.id || state.materials[0]?.id || '';
+  state.selectedMaterialId=next;
+  if(next) select.value=next;
   updateSelectedMaterialUI();
+  const min=$('minimumPieceCost');
+  const unit=$('roundingUnit');
+  if(min) min.value=state.minimumPieceCost;
+  if(unit) unit.value=state.roundingUnit;
 }
 
 function updateSelectedMaterialUI(){
