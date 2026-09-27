@@ -48,6 +48,11 @@ input[type=number]{appearance:textfield}
 .rule-card strong{display:block;color:#222;margin-bottom:4px}
 .warning{margin-top:12px;background:#fff8e8;border:1px solid #ead3a0;color:var(--warn);padding:10px 12px;border-radius:11px;font-size:12px}
 .selected-material-card{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}
+.construction-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.construction-summary{display:grid;gap:6px;margin-top:2px}
+.construction-summary .summary-line{padding:9px 10px;background:#fafaf8;border:1px solid var(--line);border-radius:10px;font-size:11px;color:#666}
+.construction-summary .summary-line b{color:#222}
+
 .selected-material-card>div{background:#f6f6f3;border:1px solid #e1e1dc;border-radius:11px;padding:10px}
 .selected-material-card span,.dimension-card span,.summary-card span,.viewer-overlay span{display:block;text-transform:uppercase;letter-spacing:.13em;color:#7e7e78;font-weight:900;font-size:9px}
 .selected-material-card strong{display:block;font-size:15px;margin-top:4px}

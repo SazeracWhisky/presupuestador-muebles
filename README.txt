@@ -1,5 +1,7 @@
-V1.9
-Visor 3D de perspectiva cónica con cámara ajustada automáticamente para mantener el modelo completo en pantalla.
-Órbita libre horizontal y vertical, zoom, pinch y paneo con Shift+arrastre.
-Texturas procedurales realistas y espesor proporcional.
-app.js lleva query de versión para evitar caché de GitHub Pages.
+V2.0
+Despiece paramétrico con descuentos automáticos por espesor.
+Base y techo: entre laterales u sobre laterales.
+Laterales y divisiones calculados automáticamente.
+Estantes dimensionados por ancho útil de módulo, descontando el espesor de las verticales.
+Visor 3D mantenido sin cambios estructurales.
+Los datos de materiales se guardan localmente en este navegador.

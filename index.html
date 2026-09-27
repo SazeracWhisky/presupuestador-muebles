@@ -39,11 +39,29 @@
         <label>Desperdicio<input id="waste" type="number" min="0" step=".5" value="0"><span class="unit">%</span></label>
       </div>
 
-      <div class="panel-title section-gap"><div><span class="step">03</span><h3>Divisiones verticales</h3></div><button id="addDivider" class="secondary-btn" type="button">+ División</button></div>
-      <div id="dividersList" class="component-list"></div>
-      <p class="helper">La posición se mide desde la cara interior izquierda hasta la cara izquierda de la división.</p>
+      <div class="panel-title section-gap"><div><span class="step">03</span><h3>Construcción de la caja</h3></div></div>
+      <div class="construction-grid">
+        <label>Base
+          <select id="basePlacement">
+            <option value="inside">Entre laterales</option>
+            <option value="outside">Sobre laterales</option>
+          </select>
+        </label>
+        <label>Techo
+          <select id="roofPlacement">
+            <option value="inside">Entre laterales</option>
+            <option value="outside">Sobre laterales</option>
+          </select>
+        </label>
+      </div>
+      <p class="helper">Estas opciones determinan automáticamente el ancho de base/techo y la altura de los laterales. El espesor seleccionado se descuenta donde corresponda.</p>
+      <div class="construction-summary" id="constructionSummary"></div>
 
-      <div class="panel-title section-gap"><div><span class="step">04</span><h3>Estantes horizontales</h3></div><button id="addShelf" class="secondary-btn" type="button">+ Estante</button></div>
+      <div class="panel-title section-gap"><div><span class="step">04</span><h3>Divisiones verticales</h3></div><button id="addDivider" class="secondary-btn" type="button">+ División</button></div>
+      <div id="dividersList" class="component-list"></div>
+      <p class="helper">La posición se mide desde la cara interior izquierda hasta la cara izquierda de la división. El ancho libre de cada módulo se calcula descontando automáticamente el espesor de cada vertical.</p>
+
+      <div class="panel-title section-gap"><div><span class="step">05</span><h3>Estantes horizontales</h3></div><button id="addShelf" class="secondary-btn" type="button">+ Estante</button></div>
       <div id="shelvesList" class="component-list"></div>
       <p class="helper">La altura se mide desde la cara superior de la base. Cada estante ocupa el módulo elegido.</p>
 
