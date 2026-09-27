@@ -4,25 +4,12 @@ const $ = (id) => document.getElementById(id);
 const MATERIALS_KEY = 'presupuestador_materiales_v3';
 const SETTINGS_KEY = 'presupuestador_settings_v1';
 const MODEL_KEY = 'presupuestador_model_v1';
-const MATERIAL_OPTIONS = [
-  'Melamina Blanca Aglomerado',
-  'Melamina Blanca MDF',
-  'Melamina Color Clásico Aglomerado (Negro/Cedro)',
-  'Melamina Color Nature MDF (Cedro/Roble Dakar/Roble Americano)',
-  'MDF',
-  'Fibroplus Blanco',
-  'Fibroplus Color (Cedro/Negro)',
-  'Pino',
-  'Eucaliptu',
-  'Fenólico',
-  'Terciado Pino',
-  'Enchapado Aglomerado (Cedro/Cerejeira/Paraíso/Guatambú)'
-];
-const THICKNESS_OPTIONS = [3,5,6,8,9,10,12,15,18,20,22,25,30,34];
-
 const state = {
   materials: loadMaterials(),
   selectedMaterialId: '',
+  selectedFamilyId: '',
+  selectedVariant: '',
+  selectedThickness: '',
   dividers: [{ id: cryptoId(), position: 470 }],
   shelves: [
     { id: cryptoId(), section: 0, height: 350 },
@@ -49,47 +36,119 @@ function loadMaterials(){
     const v1=JSON.parse(localStorage.getItem('presupuestador_materiales_v1'));
     if(Array.isArray(v1)) return v1;
   } catch{}
-  return [{id:cryptoId(),name:'MDF',thickness:15,price:48000}];
+  return [];
 }
 
 function loadSettings(){ try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }catch{return{};} }
 function saveMaterials(){ localStorage.setItem(MATERIALS_KEY, JSON.stringify(state.materials)); }
 function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({minimumPieceCost:state.minimumPieceCost,roundingUnit:state.roundingUnit})); }
-function currentMaterial(){ return state.materials.find(m=>m.id === $('materialSelect').value) || null; }
-function materialOrDefault(){ return currentMaterial() || state.materials[0] || null; }
+function currentMaterial(){
+  const id = $('materialThicknessSelect')?.value || state.selectedMaterialId || '';
+  return state.materials.find(m => m.id === id) || null;
+}
 
-Object.assign(state, loadSettings());
-if(!Number.isFinite(state.minimumPieceCost)) state.minimumPieceCost=4000;
-if(!Number.isFinite(state.roundingUnit) || state.roundingUnit<=0) state.roundingUnit=1000;
-if(state.materials[0]) state.selectedMaterialId=state.materials[0].id;
+function catalogFamilies(){
+  const rows = state.materials.filter(m => m && m.materialId);
+  const ids = [...new Set(rows.map(m => m.materialId))];
+  return ids.map(materialId => {
+    const first = rows.find(r => r.materialId === materialId);
+    return { id: materialId, label: first?.name?.split(' · ')[0] || materialId };
+  });
+}
+
+function familyRows(){
+  const familyId = $('materialFamilySelect')?.value || state.selectedFamilyId || '';
+  return state.materials.filter(m => m.materialId === familyId);
+}
+
+function variantRows(){
+  return familyRows().map(m => (m.variant || '')).filter((v,i,a) => a.indexOf(v)===i).sort((a,b)=>String(a).localeCompare(String(b),'es'));
+}
+
+function canonicalName(m){
+  if(!m) return '';
+  return m.variant ? `${m.name?.split(' · ')[0] || m.name} · ${m.variant}` : (m.name || '');
+}
+
+function setSelectOptions(select, rows, placeholder){
+  if(!select) return;
+  select.innerHTML='';
+  select.add(new Option(placeholder,'',true,true));
+  rows.forEach(row => select.add(new Option(row.label, row.value)));
+}
 
 function renderMaterialOptions(){
-  // Los desplegables ya vienen con sus opciones en HTML para que funcionen aunque el visor tarde en cargar.
+  const familySelect=$('materialFamilySelect');
+  if(!familySelect) return;
+  const families=catalogFamilies();
+  const previous=state.selectedFamilyId || familySelect.value || '';
+  setSelectOptions(familySelect, families.map(f=>({label:f.label,value:f.id})),'Seleccionar material...');
+  const next=families.some(f=>f.id===previous)?previous:(families[0]?.id||'');
+  state.selectedFamilyId=next;
+  familySelect.value=next;
+  renderVariantOptions();
+}
+
+function renderVariantOptions(){
+  const familyRowsList=familyRows();
+  const variantSelect=$('materialVariantSelect');
+  const label=$('calcVariantLabel');
+  if(!variantSelect) return;
+  const variants=variantRows();
+  if(!variants.length){
+    variantSelect.innerHTML='';
+    variantSelect.add(new Option('Sin variante','',true,true));
+    variantSelect.disabled=true;
+    label?.classList.add('hidden');
+    state.selectedVariant='';
+  } else {
+    variantSelect.disabled=false;
+    label?.classList.remove('hidden');
+    const previous=state.selectedVariant;
+    setSelectOptions(variantSelect, variants.map(v=>({label:v,value:v})),'Seleccionar color...');
+    const next=variants.includes(previous)?previous:variants[0];
+    state.selectedVariant=next;
+    variantSelect.value=next;
+  }
+  renderThicknessOptions();
+}
+
+function renderThicknessOptions(){
+  const select=$('materialThicknessSelect');
+  if(!select) return;
+  let rows=familyRows();
+  if(state.selectedVariant || variantRows().length){
+    rows=rows.filter(m => (m.variant || '') === (state.selectedVariant || ''));
+  }
+  rows=[...rows].sort((a,b)=>Number(a.thickness)-Number(b.thickness));
+  const previous=state.selectedThickness;
+  const unique=rows.filter((m,i,a)=>a.findIndex(x=>x.thickness===m.thickness)===i);
+  setSelectOptions(select, unique.map(m=>({label:`${m.thickness} mm · ${money(Number(m.price)||0)}/m²`,value:m.id})),'Seleccionar grosor...');
+  const found=unique.find(m=>m.id===previous) || unique[0] || null;
+  state.selectedThickness=found?.id || '';
+  state.selectedMaterialId=found?.id || '';
+  select.value=found?.id || '';
+  updateSelectedMaterialUI();
 }
 
 function renderMaterialCatalog(){
-  const select=$('materialSelect');
-  if (!select) return;
-  const previous=select.value || state.selectedMaterialId;
-  select.innerHTML=state.materials.length
-    ? state.materials.map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} · ${m.thickness ?? '—'} mm · ${money(Number(m.price)||0)}/m²</option>`).join('')
-    : '<option value="">No hay materiales cargados</option>';
-  const next=state.materials.find(m=>m.id===previous)?.id || state.materials[0]?.id || '';
-  state.selectedMaterialId=next;
-  if(next) select.value=next;
-  updateSelectedMaterialUI();
+  state.materials=state.materials.filter(m => m && m.materialId && Number.isFinite(Number(m.thickness)) && Number.isFinite(Number(m.price)));
+  renderMaterialOptions();
   const min=$('minimumPieceCost');
   const unit=$('roundingUnit');
   if(min) min.value=state.minimumPieceCost;
   if(unit) unit.value=state.roundingUnit;
+  const count=$('materialsCount');
+  if(count) count.textContent=`${state.materials.length} materiales`;
 }
 
 function updateSelectedMaterialUI(){
   const material=currentMaterial();
   $('selectedThickness').textContent=material?`${material.thickness} mm`:'—';
-  $('selectedPrice').textContent=material?`${money(material.price)}/m²`:'—';
-  $('materialStatus').textContent=material?`${material.name} · ${material.thickness} mm`:'Material no seleccionado';
-  $('viewerMaterial').textContent=material?`${material.name} · ${material.thickness} mm`:'Sin material';
+  $('selectedPrice').textContent=material?`${money(Number(material.price)||0)}/m²`:'—';
+  const label=material ? (material.name || canonicalName(material)) : '';
+  $('materialStatus').textContent=material?`${label} · ${material.thickness} mm`:'Material no seleccionado';
+  $('viewerMaterial').textContent=material?`${label} · ${material.thickness} mm`:'Sin material';
 }
 
 function dims(){
@@ -273,7 +332,9 @@ function bind(){
     if(pageId==='calculatorPage'){ setTimeout(()=>{resizeViewer();buildModel();},0); }
   }));
   window.addEventListener('calculatorPageShown',()=>{setTimeout(()=>{resizeViewer();buildModel();},0);});
-  $('materialSelect').addEventListener('change',()=>{state.selectedMaterialId=$('materialSelect').value; updateSelectedMaterialUI(); renderComponents(); updateBudget();});
+  $('materialFamilySelect').addEventListener('change',()=>{state.selectedFamilyId=$('materialFamilySelect').value; state.selectedVariant=''; state.selectedThickness=''; renderVariantOptions(); renderComponents(); updateBudget();});
+  $('materialVariantSelect').addEventListener('change',()=>{state.selectedVariant=$('materialVariantSelect').value; state.selectedThickness=''; renderThicknessOptions(); renderComponents(); updateBudget();});
+  $('materialThicknessSelect').addEventListener('change',()=>{state.selectedMaterialId=$('materialThicknessSelect').value; state.selectedThickness=state.selectedMaterialId; updateSelectedMaterialUI(); renderComponents(); updateBudget();});
   window.addEventListener('materialsUpdated',()=>{state.materials=loadMaterials(); renderMaterialCatalog(); updateBudget();});
   inputIds.forEach(id=>els[id].addEventListener('input',()=>{renderComponents();updateBudget();}));
   $('addDivider').addEventListener('click',()=>{const model=dims();state.dividers.push({id:cryptoId(),position:Math.min(300,Math.max(model.innerW-model.T,0))});renderComponents();updateBudget();});

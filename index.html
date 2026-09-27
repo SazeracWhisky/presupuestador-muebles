@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
-  <title>Presupuestador de Muebles · V1.1</title>
+  <title>Presupuestador de Muebles · V1.2</title>
   <link rel="stylesheet" href="styles.css" />
   
 </head>
@@ -16,7 +16,7 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V1.1 · CATÁLOGO</div>
+    <div class="version-badge">V1.2 · CONFIGURADOR</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -40,8 +40,14 @@
           <div class="panel-title">
             <div><span class="step">01</span><h3>Material</h3></div>
           </div>
-          <label>Material / grosor
-            <select id="materialSelect"></select>
+          <label>Material
+            <select id="materialFamilySelect"></select>
+          </label>
+          <label id="calcVariantLabel">Color / variante
+            <select id="materialVariantSelect"></select>
+          </label>
+          <label>Grosor
+            <select id="materialThicknessSelect"></select>
           </label>
           <div class="selected-material-card">
             <div><span>Grosor</span><strong id="selectedThickness">—</strong></div>
@@ -170,7 +176,7 @@
     </section>
   </main>
 
-  <footer class="footer-note">V1.1 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V1.2 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script>
     // Navegación de respaldo: funciona aunque algún módulo externo falle al cargar.
     function showPage(pageId, button) {
