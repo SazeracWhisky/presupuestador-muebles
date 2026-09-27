@@ -1,7 +1,6 @@
-V1.6
-index.html: Cálculo de mueble
-materiales.html: Base de materiales
-catalog.js: catálogo compartido
-app.js: cálculo y visor 3D Canvas sin dependencias externas
-materials.js: base de materiales independiente
-Los datos se guardan en localStorage del navegador.
+V1.7
+Cálculo de mueble + Base de materiales independiente.
+Visor 3D Canvas con cámara perspectiva y órbita completa.
+Arrastre: orbitar. Shift + arrastre: desplazar. Rueda/pinch: zoom.
+Texturas procedurales para maderas y superficies mate.
+Sin dependencias externas para el visor.
