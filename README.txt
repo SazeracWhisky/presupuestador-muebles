@@ -1,7 +1,6 @@
-V2.0
-Despiece paramétrico con descuentos automáticos por espesor.
-Base y techo: entre laterales u sobre laterales.
-Laterales y divisiones calculados automáticamente.
-Estantes dimensionados por ancho útil de módulo, descontando el espesor de las verticales.
-Visor 3D mantenido sin cambios estructurales.
-Los datos de materiales se guardan localmente en este navegador.
+V2.1
+Corrección de despiece según posición de base y tapa.
+Base entre laterales = W - 2T; base sobre laterales = W.
+Tapa entre laterales = W - 2T; tapa sobre laterales = W.
+El despiece muestra Base y Tapa con nombres unificados.
+Cache-bust de app.js para GitHub Pages.

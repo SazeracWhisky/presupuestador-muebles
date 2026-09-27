@@ -182,10 +182,13 @@ function getParts(){
   // Horizontal pieces:
   // "inside" = between side panels, so width is W - 2T.
   // "outside" = covers the sides, so width is the full W.
-  const baseWidth = basePlacement === "inside" ? innerW : m.W;
-  const roofWidth = roofPlacement === "inside" ? innerW : m.W;
+  const baseWidth = basePlacement === "inside" ? Math.max(m.W - 2*m.T, 0) : m.W;
+  const roofWidth = roofPlacement === "inside" ? Math.max(m.W - 2*m.T, 0) : m.W;
 
-  // The verticals only lose height where a horizontal panel is outside them.
+  // If a horizontal panel sits ON the laterals, the overall height includes
+  // that panel's thickness outside the verticals. The verticals must therefore
+  // be shortened on that side. If the horizontal is BETWEEN the laterals, the
+  // laterals remain full-height and the horizontal width is W - 2T.
   const bottomInset = basePlacement === "outside" ? m.T : 0;
   const topInset = roofPlacement === "outside" ? m.T : 0;
   const verticalHeight = Math.max(m.H - bottomInset - topInset, 0);
@@ -202,14 +205,21 @@ function getParts(){
   });
 
   // Base and roof keep their outer faces flush with the overall dimensions.
+  const baseY = basePlacement === "inside"
+    ? -m.H/2 + bottomInset + m.T/2
+    : -m.H/2 + m.T/2;
+  const roofY = roofPlacement === "inside"
+    ?  m.H/2 - topInset - m.T/2
+    :  m.H/2 - m.T/2;
+
   p.push({
     name:`Base · ${basePlacement === "inside" ? "entre laterales" : "sobre laterales"}`,
-    w:baseWidth, h:m.T, d:m.D, x:0, y:-m.H/2+m.T/2, z:0,
+    w:baseWidth, h:m.T, d:m.D, x:0, y:baseY, z:0,
     type:"horizontal", grain:"horizontal"
   });
   p.push({
-    name:`Techo · ${roofPlacement === "inside" ? "entre laterales" : "sobre laterales"}`,
-    w:roofWidth, h:m.T, d:m.D, x:0, y:m.H/2-m.T/2, z:0,
+    name:`Tapa · ${roofPlacement === "inside" ? "entre laterales" : "sobre laterales"}`,
+    w:roofWidth, h:m.T, d:m.D, x:0, y:roofY, z:0,
     type:"horizontal", grain:"horizontal"
   });
 
@@ -339,11 +349,14 @@ function renderComponents(){
 
   const baseLabel = basePlacement === "inside" ? "Entre laterales" : "Sobre laterales";
   const roofLabel = roofPlacement === "inside" ? "Entre laterales" : "Sobre laterales";
+  const baseCut = basePlacement==="inside" ? Math.max(m.W-2*m.T,0) : m.W;
+  const roofCut = roofPlacement==="inside" ? Math.max(m.W-2*m.T,0) : m.W;
+  const sideCut = Math.max(0,m.H-(basePlacement==="outside"?m.T:0)-(roofPlacement==="outside"?m.T:0));
   $("constructionSummary").innerHTML = `
-    <div class="summary-line"><b>Base:</b> ${baseLabel} · ancho de corte <b>${Math.max(0,(basePlacement==="inside"?m.W-2*m.T:m.W)).toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Techo:</b> ${roofLabel} · ancho de corte <b>${Math.max(0,(roofPlacement==="inside"?m.W-2*m.T:m.W)).toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Laterales:</b> altura de corte <b>${Math.max(0,m.H-(basePlacement==="outside"?m.T:0)-(roofPlacement==="outside"?m.T:0)).toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Divisiones / estantes:</b> alto libre de referencia <b>${Math.max(0,m.H-2*m.T).toFixed(0)} mm</b> · espesor <b>${m.T} mm</b></div>`;
+    <div class="summary-line"><b>Base:</b> ${baseLabel} · ancho de corte <b>${baseCut.toFixed(0)} mm</b></div>
+    <div class="summary-line"><b>Tapa:</b> ${roofLabel} · ancho de corte <b>${roofCut.toFixed(0)} mm</b></div>
+    <div class="summary-line"><b>Laterales:</b> altura de corte <b>${sideCut.toFixed(0)} mm</b></div>
+    <div class="summary-line"><b>Divisiones / estantes:</b> ancho de estantes calculado automáticamente según el espacio libre entre verticales · espesor <b>${m.T} mm</b></div>`;
 }
 
 $("basePlacement").addEventListener("change",e=>{
