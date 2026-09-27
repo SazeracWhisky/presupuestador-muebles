@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
-  <title>Presupuestador de Muebles · V0.7</title>
+  <title>Presupuestador de Muebles · V0.9</title>
   <link rel="stylesheet" href="styles.css" />
   
 </head>
@@ -16,12 +16,12 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V0.7 · CATÁLOGO</div>
+    <div class="version-badge">V0.9 · CATÁLOGO</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
-    <button class="nav-btn active" data-page="calculatorPage">1 · Cálculo de mueble</button>
-    <button class="nav-btn" data-page="materialsPage">2 · Base de materiales</button>
+    <button type="button" class="nav-btn active" data-page="calculatorPage" onclick="showPage('calculatorPage', this)">1 · Cálculo de mueble</button>
+    <button type="button" class="nav-btn" data-page="materialsPage" onclick="showPage('materialsPage', this)">2 · Base de materiales</button>
   </nav>
 
   <main class="app-shell">
@@ -189,7 +189,20 @@
     </section>
   </main>
 
-  <footer class="footer-note">V0.7 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V0.9 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <script>
+    // Navegación de respaldo: funciona aunque algún módulo externo falle al cargar.
+    function showPage(pageId, button) {
+      document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.toggle('active', b === button); });
+      document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('active-page', p.id === pageId); });
+      if (pageId === 'calculatorPage') {
+        window.dispatchEvent(new Event('calculatorPageShown'));
+      }
+      if (pageId === 'materialsPage') {
+        window.dispatchEvent(new Event('materialsPageShown'));
+      }
+    }
+  </script>
   <script src="catalog.js" defer></script>
   <script type="module" src="app.js"></script>
 </body>

@@ -265,7 +265,17 @@ function resizeViewer(){ if(!renderer||!camera)return; const c=$('viewer'); cons
 function resetView(){ fitCameraToModel(); controls.reset(); }
 
 function bind(){
-  document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active-page'));btn.classList.add('active');$(btn.dataset.page).classList.add('active-page'); if(btn.dataset.page==='calculatorPage'){resizeViewer();buildModel();}}));
+  // La navegación principal también tiene un fallback inline en index.html.
+  document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    const pageId=btn.dataset.page;
+    if(typeof window.showPage==='function') window.showPage(pageId,btn);
+    else {
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b===btn));
+      document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active-page',p.id===pageId));
+    }
+    if(pageId==='calculatorPage'){ setTimeout(()=>{resizeViewer();buildModel();},0); }
+  }));
+  window.addEventListener('calculatorPageShown',()=>{setTimeout(()=>{resizeViewer();buildModel();},0);});
   $('materialSelect').addEventListener('change',()=>{state.selectedMaterialId=$('materialSelect').value; updateSelectedMaterialUI(); renderComponents(); updateBudget();});
   window.addEventListener('materialsUpdated',()=>{state.materials=loadMaterials(); renderMaterialCatalog(); updateBudget();});
   inputIds.forEach(id=>els[id].addEventListener('input',()=>{renderComponents();updateBudget();}));
@@ -281,8 +291,8 @@ function bind(){
   $('roundingUnit').addEventListener('input',()=>{state.roundingUnit=Math.max(Number($('roundingUnit').value)||1,1);saveSettings();updateBudget();});
 }
 
-renderMaterialCatalog();
-initViewer();
+try { renderMaterialCatalog(); } catch (error) { console.error('Error al cargar el catálogo:', error); }
+try { initViewer(); } catch (error) { console.error('Error al iniciar el visor:', error); }
 bind();
 renderComponents();
 updateBudget();
