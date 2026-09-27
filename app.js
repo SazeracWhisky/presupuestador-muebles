@@ -43,7 +43,7 @@ function loadSettings(){ try{ return JSON.parse(localStorage.getItem(SETTINGS_KE
 function saveMaterials(){ localStorage.setItem(MATERIALS_KEY, JSON.stringify(state.materials)); }
 function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({minimumPieceCost:state.minimumPieceCost,roundingUnit:state.roundingUnit})); }
 function currentMaterial(){
-  const id = $('materialThicknessSelect')?.value || state.selectedMaterialId || '';
+  const id = state.selectedMaterialId || '';
   return state.materials.find(m => m.id === id) || null;
 }
 
@@ -57,12 +57,15 @@ function catalogFamilies(){
 }
 
 function familyRows(){
-  const familyId = $('materialFamilySelect')?.value || state.selectedFamilyId || '';
+  const familyId = state.selectedFamilyId || '';
   return state.materials.filter(m => m.materialId === familyId);
 }
 
 function variantRows(){
-  return familyRows().map(m => (m.variant || '')).filter((v,i,a) => a.indexOf(v)===i).sort((a,b)=>String(a).localeCompare(String(b),'es'));
+  return familyRows()
+    .map(m => (m.variant || ''))
+    .filter((v,i,a) => a.indexOf(v)===i)
+    .sort((a,b)=>String(a).localeCompare(String(b),'es'));
 }
 
 function canonicalName(m){
@@ -81,20 +84,44 @@ function renderMaterialOptions(){
   const familySelect=$('materialFamilySelect');
   if(!familySelect) return;
   const families=catalogFamilies();
-  const previous=state.selectedFamilyId || familySelect.value || '';
-  setSelectOptions(familySelect, families.map(f=>({label:f.label,value:f.id})),'Seleccionar material...');
-  const next=families.some(f=>f.id===previous)?previous:(families[0]?.id||'');
-  state.selectedFamilyId=next;
-  familySelect.value=next;
+  const previous=state.selectedFamilyId || '';
+  setSelectOptions(
+    familySelect,
+    families.map(f=>({label:f.label,value:f.id})),
+    'Seleccionar material...'
+  );
+
+  // No auto-seleccionar: el usuario debe elegir el material explícitamente.
+  const keep = families.some(f => f.id === previous);
+  state.selectedFamilyId = keep ? previous : '';
+  familySelect.value = state.selectedFamilyId;
+
+  if (!state.selectedFamilyId) {
+    state.selectedVariant = '';
+    state.selectedThickness = '';
+    state.selectedMaterialId = '';
+  }
+
   renderVariantOptions();
 }
 
 function renderVariantOptions(){
-  const familyRowsList=familyRows();
   const variantSelect=$('materialVariantSelect');
   const label=$('calcVariantLabel');
   if(!variantSelect) return;
+
   const variants=variantRows();
+
+  if(!state.selectedFamilyId){
+    variantSelect.innerHTML='';
+    variantSelect.add(new Option('Seleccioná un material primero','',true,true));
+    variantSelect.disabled=true;
+    label?.classList.add('hidden');
+    state.selectedVariant='';
+    renderThicknessOptions();
+    return;
+  }
+
   if(!variants.length){
     variantSelect.innerHTML='';
     variantSelect.add(new Option('Sin variante','',true,true));
@@ -105,26 +132,81 @@ function renderVariantOptions(){
     variantSelect.disabled=false;
     label?.classList.remove('hidden');
     const previous=state.selectedVariant;
-    setSelectOptions(variantSelect, variants.map(v=>({label:v,value:v})),'Seleccionar color...');
-    const next=variants.includes(previous)?previous:variants[0];
-    state.selectedVariant=next;
-    variantSelect.value=next;
+    setSelectOptions(
+      variantSelect,
+      variants.map(v=>({label:v,value:v})),
+      'Seleccionar color / variante...'
+    );
+    // No auto-seleccionar una variante.
+    state.selectedVariant = variants.includes(previous) ? previous : '';
+    variantSelect.value = state.selectedVariant;
   }
+
   renderThicknessOptions();
 }
 
 function renderThicknessOptions(){
   const select=$('materialThicknessSelect');
+  const label=$('calcThicknessLabel');
   if(!select) return;
-  let rows=familyRows();
-  if(state.selectedVariant || variantRows().length){
-    rows=rows.filter(m => (m.variant || '') === (state.selectedVariant || ''));
+
+  select.innerHTML='';
+
+  if(!state.selectedFamilyId){
+    select.add(new Option('Seleccioná un material primero','',true,true));
+    select.disabled=true;
+    label?.classList.add('hidden');
+    state.selectedThickness='';
+    state.selectedMaterialId='';
+    updateSelectedMaterialUI();
+    return;
   }
-  rows=[...rows].sort((a,b)=>Number(a.thickness)-Number(b.thickness));
+
+  const variants = variantRows();
+  // Para materiales con variantes, primero hay que elegir una variante.
+  if(variants.length && !state.selectedVariant){
+    select.add(new Option('Seleccioná un color / variante primero','',true,true));
+    select.disabled=true;
+    label?.classList.remove('hidden');
+    state.selectedThickness='';
+    state.selectedMaterialId='';
+    updateSelectedMaterialUI();
+    return;
+  }
+
+  let rows=familyRows();
+  if(variants.length){
+    rows=rows.filter(m => (m.variant || '') === state.selectedVariant);
+  }
+
+  rows=[...rows]
+    .filter(m => Number.isFinite(Number(m.thickness)))
+    .sort((a,b)=>Number(a.thickness)-Number(b.thickness));
+
+  if(!rows.length){
+    select.add(new Option('No hay grosores cargados','',true,true));
+    select.disabled=true;
+    label?.classList.remove('hidden');
+    state.selectedThickness='';
+    state.selectedMaterialId='';
+    updateSelectedMaterialUI();
+    return;
+  }
+
+  setSelectOptions(
+    select,
+    [...new Map(rows.map(m=>[Number(m.thickness),m])).values()].map(m=>({
+      label:`${Number(m.thickness)} mm`,
+      value:m.id
+    })),
+    'Seleccionar grosor...'
+  );
+  select.disabled=false;
+  label?.classList.remove('hidden');
+
   const previous=state.selectedThickness;
-  const unique=rows.filter((m,i,a)=>a.findIndex(x=>x.thickness===m.thickness)===i);
-  setSelectOptions(select, unique.map(m=>({label:`${m.thickness} mm · ${money(Number(m.price)||0)}/m²`,value:m.id})),'Seleccionar grosor...');
-  const found=unique.find(m=>m.id===previous) || unique[0] || null;
+  // No auto-seleccionar un grosor.
+  const found=rows.find(m=>m.id===previous) || null;
   state.selectedThickness=found?.id || '';
   state.selectedMaterialId=found?.id || '';
   select.value=found?.id || '';
@@ -133,22 +215,27 @@ function renderThicknessOptions(){
 
 function renderMaterialCatalog(){
   state.materials=state.materials.filter(m => m && m.materialId && Number.isFinite(Number(m.thickness)) && Number.isFinite(Number(m.price)));
-  renderMaterialOptions();
   const min=$('minimumPieceCost');
   const unit=$('roundingUnit');
   if(min) min.value=state.minimumPieceCost;
   if(unit) unit.value=state.roundingUnit;
   const count=$('materialsCount');
   if(count) count.textContent=`${state.materials.length} materiales`;
+  renderMaterialOptions();
 }
 
 function updateSelectedMaterialUI(){
   const material=currentMaterial();
-  $('selectedThickness').textContent=material?`${material.thickness} mm`:'—';
-  $('selectedPrice').textContent=material?`${money(Number(material.price)||0)}/m²`:'—';
-  const label=material ? (material.name || canonicalName(material)) : '';
-  $('materialStatus').textContent=material?`${label} · ${material.thickness} mm`:'Material no seleccionado';
-  $('viewerMaterial').textContent=material?`${label} · ${material.thickness} mm`:'Sin material';
+  const thicknessCard=$('selectedThicknessCard');
+  const priceCard=$('selectedPriceCard');
+  if(thicknessCard) thicknessCard.classList.toggle('hidden', !material);
+  if(priceCard) priceCard.classList.toggle('hidden', !material);
+  $('selectedThickness').textContent=material ? `${material.thickness} mm` : '—';
+  // El precio sólo se muestra cuando la combinación material/variante/grosor está completa.
+  $('selectedPrice').textContent=material ? `${money(Number(material.price)||0)}/m²` : '—';
+  const label=material ? canonicalName(material) : '';
+  $('materialStatus').textContent=material ? `${label} · ${material.thickness} mm`:'Material no seleccionado';
+  $('viewerMaterial').textContent=material ? `${label} · ${material.thickness} mm`:'Sin material';
 }
 
 function dims(){
@@ -332,9 +419,30 @@ function bind(){
     if(pageId==='calculatorPage'){ setTimeout(()=>{resizeViewer();buildModel();},0); }
   }));
   window.addEventListener('calculatorPageShown',()=>{setTimeout(()=>{resizeViewer();buildModel();},0);});
-  $('materialFamilySelect').addEventListener('change',()=>{state.selectedFamilyId=$('materialFamilySelect').value; state.selectedVariant=''; state.selectedThickness=''; renderVariantOptions(); renderComponents(); updateBudget();});
-  $('materialVariantSelect').addEventListener('change',()=>{state.selectedVariant=$('materialVariantSelect').value; state.selectedThickness=''; renderThicknessOptions(); renderComponents(); updateBudget();});
-  $('materialThicknessSelect').addEventListener('change',()=>{state.selectedMaterialId=$('materialThicknessSelect').value; state.selectedThickness=state.selectedMaterialId; updateSelectedMaterialUI(); renderComponents(); updateBudget();});
+  $('materialFamilySelect').addEventListener('change',()=>{
+    state.selectedFamilyId=$('materialFamilySelect').value;
+    state.selectedVariant='';
+    state.selectedThickness='';
+    state.selectedMaterialId='';
+    renderVariantOptions();
+    renderComponents();
+    updateBudget();
+  });
+  $('materialVariantSelect').addEventListener('change',()=>{
+    state.selectedVariant=$('materialVariantSelect').value;
+    state.selectedThickness='';
+    state.selectedMaterialId='';
+    renderThicknessOptions();
+    renderComponents();
+    updateBudget();
+  });
+  $('materialThicknessSelect').addEventListener('change',()=>{
+    state.selectedMaterialId=$('materialThicknessSelect').value;
+    state.selectedThickness=state.selectedMaterialId;
+    updateSelectedMaterialUI();
+    renderComponents();
+    updateBudget();
+  });
   window.addEventListener('materialsUpdated',()=>{state.materials=loadMaterials(); renderMaterialCatalog(); updateBudget();});
   inputIds.forEach(id=>els[id].addEventListener('input',()=>{renderComponents();updateBudget();}));
   $('addDivider').addEventListener('click',()=>{const model=dims();state.dividers.push({id:cryptoId(),position:Math.min(300,Math.max(model.innerW-model.T,0))});renderComponents();updateBudget();});

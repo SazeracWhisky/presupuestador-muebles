@@ -16,7 +16,7 @@
       <h1>Presupuestador de Muebles</h1>
       <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V1.2 · CONFIGURADOR</div>
+    <div class="version-badge">V1.3 · CONFIGURADOR</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -41,17 +41,17 @@
             <div><span class="step">01</span><h3>Material</h3></div>
           </div>
           <label>Material
-            <select id="materialFamilySelect"></select>
+            <select id="materialFamilySelect" aria-label="Seleccionar material"></select>
           </label>
-          <label id="calcVariantLabel">Color / variante
-            <select id="materialVariantSelect"></select>
+          <label id="calcVariantLabel" class="hidden">Color / variante
+            <select id="materialVariantSelect" aria-label="Seleccionar color o variante"></select>
           </label>
-          <label>Grosor
-            <select id="materialThicknessSelect"></select>
+          <label id="calcThicknessLabel" class="hidden">Grosor
+            <select id="materialThicknessSelect" aria-label="Seleccionar grosor"></select>
           </label>
           <div class="selected-material-card">
-            <div><span>Grosor</span><strong id="selectedThickness">—</strong></div>
-            <div><span>Precio</span><strong id="selectedPrice">—</strong></div>
+            <div id="selectedThicknessCard" class="hidden"><span>Grosor</span><strong id="selectedThickness">—</strong></div>
+            <div id="selectedPriceCard" class="hidden"><span>Precio</span><strong id="selectedPrice">—</strong></div>
           </div>
 
           <div class="panel-title section-gap">
@@ -176,7 +176,7 @@
     </section>
   </main>
 
-  <footer class="footer-note">V1.2 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
+  <footer class="footer-note">V1.3 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script>
     // Navegación de respaldo: funciona aunque algún módulo externo falle al cargar.
     function showPage(pageId, button) {
