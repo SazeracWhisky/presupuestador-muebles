@@ -1,5 +1,5 @@
-V1.8
-Corrección de escala de cámara perspectiva para evitar que el modelo llene el visor.
-Órbita completa estable, zoom y paneo.
-Texturas procedurales y espesor proporcional.
-Sin dependencias externas para el visor.
+V1.9
+Visor 3D de perspectiva cónica con cámara ajustada automáticamente para mantener el modelo completo en pantalla.
+Órbita libre horizontal y vertical, zoom, pinch y paneo con Shift+arrastre.
+Texturas procedurales realistas y espesor proporcional.
+app.js lleva query de versión para evitar caché de GitHub Pages.

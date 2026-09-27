@@ -342,18 +342,18 @@ const FACE_DEFS = [
 
 function palette(){
   const f=family(), v=(rec()?.variant||selected.variant||"").toLowerCase();
-  if(v.includes("negro")) return {base:"#272727",edge:"#111",wood:false,noise:.08};
-  if(v.includes("blanco")) return {base:"#e7e6df",edge:"#72726d",wood:false,noise:.035};
-  if(v.includes("roble")) return {base:"#b7895b",edge:"#62452e",wood:true,grain:"oak",noise:.06};
-  if(v.includes("cedro")) return {base:"#b8784e",edge:"#5e3b27",wood:true,grain:"cedar",noise:.065};
-  if(v.includes("paraíso")) return {base:"#c19a72",edge:"#76583f",wood:true,grain:"paraiso",noise:.05};
-  if(v.includes("guatambú")) return {base:"#cfb187",edge:"#806c52",wood:true,grain:"guatambu",noise:.045};
-  if(v.includes("cerejeira")) return {base:"#b36f55",edge:"#633f33",wood:true,grain:"cerejeira",noise:.055};
-  if(f?.id==="pino") return {base:"#d2ae78",edge:"#77573b",wood:true,grain:"pine",noise:.065};
-  if(f?.id==="eucaliptu") return {base:"#b69d7b",edge:"#6f5b46",wood:true,grain:"euca",noise:.06};
-  if(f?.id==="fenolico") return {base:"#765f4f",edge:"#352b26",wood:true,grain:"phenolic",noise:.08};
-  if(f?.id==="fibroplus") return {base:"#c4c1b7",edge:"#67665e",wood:false,noise:.04};
-  return {base:"#bbb8af",edge:"#68665e",wood:false,noise:.04};
+  if(v.includes("negro")) return {base:"#292929",edge:"#101010",wood:false,roughness:.32,grain:"none"};
+  if(v.includes("blanco")) return {base:"#e7e6df",edge:"#6e6d68",wood:false,roughness:.22,grain:"none"};
+  if(v.includes("roble")) return {base:"#b7895b",edge:"#60442e",wood:true,grain:"oak"};
+  if(v.includes("cedro")) return {base:"#b87950",edge:"#603c29",wood:true,grain:"cedar"};
+  if(v.includes("paraíso")) return {base:"#c29b71",edge:"#73573e",wood:true,grain:"paraiso"};
+  if(v.includes("guatambú")) return {base:"#cfb48b",edge:"#77654d",wood:true,grain:"guatambu"};
+  if(v.includes("cerejeira")) return {base:"#b77459",edge:"#624034",wood:true,grain:"cerejeira"};
+  if(f?.id==="pino") return {base:"#d2ae78",edge:"#77563b",wood:true,grain:"pine"};
+  if(f?.id==="eucaliptu") return {base:"#b89f7c",edge:"#6f5b46",wood:true,grain:"euca"};
+  if(f?.id==="fenolico") return {base:"#765f4f",edge:"#352b25",wood:true,grain:"phenolic"};
+  if(f?.id==="fibroplus") return {base:"#c5c2b7",edge:"#66645d",wood:false,roughness:.45,grain:"none"};
+  return {base:"#b9b7ae",edge:"#595750",wood:false,roughness:.35,grain:"none"};
 }
 
 function shadeColor(hex,amount){
@@ -363,50 +363,73 @@ function shadeColor(hex,amount){
   const b=clamp((n&255)+amount,0,255);
   return `rgb(${r},${g},${b})`;
 }
+
 function hexToRgb(hex){
   const n=parseInt(hex.slice(1),16);
   return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
 }
 
+// Correct yaw + pitch rotation. Uses the original y/z values so the camera transform
+// cannot compound its own result and explode the perspective.
 function rotateWorld(v){
-  // Orbit around the model center. Pitch is applied around camera-local X.
   const cy=Math.cos(view.yaw), sy=Math.sin(view.yaw);
-  let x=v.x*cy-v.z*sy;
-  let z=v.x*sy+v.z*cy;
+  const x1=v.x*cy-v.z*sy;
+  const z1=v.x*sy+v.z*cy;
 
   const cp=Math.cos(view.pitch), sp=Math.sin(view.pitch);
-  let y=v.y*cp-z*sp;
-  z=y*sp+z*cp;
+  const y0=v.y;
+  const y1=y0*cp-z1*sp;
+  const z2=y0*sp+z1*cp;
 
-  return {x,y,z};
+  return {x:x1,y:y1,z:z2};
 }
 
-function projectPerspective(v, scale, cx, cy, camDist){
-  const r=rotateWorld(v);
-  const near=Math.max(0.12,camDist*0.06);
-  const depth=camDist-r.z;
-  const p=camDist/depth;
+// Perspective camera that is fitted numerically for the current orbit angle.
+// This guarantees the complete model stays inside the viewport at every rotation.
+function fitPerspective(rotated,W,H){
+  const marginX=W*0.16, marginY=H*0.14;
+  const maxX=W-marginX*2, maxY=H-marginY*2;
+  const maxZ=Math.max(...rotated.map(p=>p.z));
+  const minZ=Math.min(...rotated.map(p=>p.z));
+
+  // Moderate field of view; zoom changes focal length, not model geometry.
+  const baseFocal=Math.min(W,H)*1.05;
+  const focal=baseFocal*view.zoom;
+
+  function extents(cameraDistance){
+    let minPX=Infinity,maxPX=-Infinity,minPY=Infinity,maxPY=-Infinity;
+    for(const p of rotated){
+      const denom=Math.max(cameraDistance-p.z, 1);
+      const px=focal*p.x/denom;
+      const py=focal*p.y/denom;
+      minPX=Math.min(minPX,px); maxPX=Math.max(maxPX,px);
+      minPY=Math.min(minPY,py); maxPY=Math.max(maxPY,py);
+    }
+    return {width:maxPX-minPX,height:maxPY-minPY,minPX,maxPX,minPY,maxPY};
+  }
+
+  // Start safely behind the whole object and binary-search the closest
+  // camera that still fits. This avoids the runaway "wall" effect.
+  let lo=Math.max(maxZ+100,1), hi=Math.max(maxZ-minZ,1000)*12;
+  for(let i=0;i<42;i++){
+    const mid=(lo+hi)/2;
+    const e=extents(mid);
+    if(e.width<=maxX && e.height<=maxY) hi=mid;
+    else lo=mid;
+  }
+  const cameraDistance=hi*1.035;
+  const e=extents(cameraDistance);
+  return {cameraDistance,focal,e};
+}
+
+function projectPerspective(v,camera,cx,cy){
+  const denom=Math.max(camera.cameraDistance-v.z,1);
+  const q=camera.focal/denom;
   return {
-    x:cx+r.x*scale*p,
-    y:cy-r.y*scale*p,
-    depth:r.z,
-    p
+    x:cx+v.x*q+view.panX,
+    y:cy-v.y*q+view.panY,
+    depth:v.z
   };
-}
-
-function computeCamera(data,W,H){
-  // Fit to a bounding sphere so the object remains in frame at every orbit angle.
-  const pts=data.parts.flatMap(vertices).map(rotateWorld);
-  let maxR=1;
-  for(const p of pts) maxR=Math.max(maxR,Math.hypot(p.x,p.y,p.z));
-
-  // Moderate FOV: visibly conical, but not excessively distorted.
-  const fov=38*Math.PI/180;
-  const viewport=Math.min(W,H);
-  const baseDistance=(maxR/Math.tan(fov/2))*1.75;
-  const camDist=baseDistance/Math.max(view.zoom,.35);
-  const scale=viewport/(2*Math.tan(fov/2));
-  return {camDist,scale,maxR};
 }
 
 function beginPathPoly(ctx,pts){
@@ -415,197 +438,160 @@ function beginPathPoly(ctx,pts){
   ctx.closePath();
 }
 
-function faceAxes(part,faceAxis){
-  // Returns two 3D vectors spanning the face, normalized-ish.
-  const hx=part.w/2, hy=part.h/2, hz=part.d/2;
-  if(faceAxis==="front" || faceAxis==="back") return [
-    {x:part.w,y:0,z:0},{x:0,y:part.h,z:0}
-  ];
-  if(faceAxis==="right" || faceAxis==="left") return [
-    {x:0,y:0,z:part.d},{x:0,y:part.h,z:0}
-  ];
-  return [
-    {x:part.w,y:0,z:0},{x:0,y:0,z:part.d}
-  ];
-}
-
-function faceOrigin(part,faceAxis){
-  const x=part.w/2,y=part.h/2,z=part.d/2;
-  switch(faceAxis){
-    case "front": return {x:part.x,y:part.y,z:part.z-z};
-    case "back": return {x:part.x,y:part.y,z:part.z+z};
-    case "right": return {x:part.x+x,y:part.y,z:part.z};
-    case "left": return {x:part.x-x,y:part.y,z:part.z};
-    case "top": return {x:part.x,y:part.y+y,z:part.z};
-    case "bottom": return {x:part.x,y:part.y-y,z:part.z};
-  }
-  return {x:part.x,y:part.y,z:part.z};
-}
-
-function textureParams(pal,part){
-  // Grain frequency based on physical dimensions; deterministic from piece size/name.
-  const maxDim=Math.max(part.w,part.h,part.d);
-  const count=clamp(Math.round(maxDim/34),8,38);
-  return {count,amp:Math.max(0.7,Math.min(3.2,maxDim/320)),grain:pal.grain||"generic"};
-}
-
-function drawWoodGrain(ctx, face, part, projected, pal, scale, cx, cy, camDist){
-  const [a,b]=faceAxes(part,face.axis);
-  const origin=faceOrigin(part,face.axis);
-  const tp=textureParams(pal,part);
-
-  // Determine grain direction along the longer board axis.
-  const lenA=Math.hypot(a.x,a.y,a.z), lenB=Math.hypot(b.x,b.y,b.z);
-  const grainAxis=lenA>=lenB ? a : b;
-  const crossAxis=lenA>=lenB ? b : a;
-
+function drawFaceTexture(ctx,facePoints,part,pal,kind){
+  // Keep all texture strokes clipped to the actual face polygon.
   ctx.save();
-  beginPathPoly(ctx,projected);
+  beginPathPoly(ctx,facePoints);
   ctx.clip();
 
-  // Subtle wood tonal wash.
+  const xs=facePoints.map(p=>p.x), ys=facePoints.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs);
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const w=Math.max(1,maxX-minX), h=Math.max(1,maxY-minY);
   const rgb=hexToRgb(pal.base);
-  const grad=ctx.createLinearGradient(0,0,0,ctx.canvas.height);
-  grad.addColorStop(0,`rgba(${rgb.r+Math.min(20,255-rgb.r)},${rgb.g+Math.min(16,255-rgb.g)},${rgb.b+10},.10)`);
-  grad.addColorStop(.52,`rgba(80,45,25,.025)`);
-  grad.addColorStop(1,`rgba(0,0,0,.07)`);
-  ctx.fillStyle=grad; ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
 
-  // Grain streaks running along the board's longest dimension.
-  const span=Math.max(lenA,lenB);
-  const step=span/(tp.count+1);
-  for(let i=1;i<=tp.count;i++){
-    const offset=(i*step-span/2);
-    const phase=(i*37 % 97)/97;
-    const wiggle=tp.amp*(0.4+phase);
+  const wash=ctx.createLinearGradient(minX,minY,maxX,maxY);
+  wash.addColorStop(0,`rgba(255,255,255,.06)`);
+  wash.addColorStop(.48,`rgba(120,70,40,.02)`);
+  wash.addColorStop(1,`rgba(0,0,0,.06)`);
+  ctx.fillStyle=wash;
+  ctx.fillRect(minX-10,minY-10,w+20,h+20);
 
-    const p1={x:origin.x+crossAxis.x*(offset/Math.max(Math.hypot(crossAxis.x,crossAxis.y,crossAxis.z),1))*0.92,
-              y:origin.y+crossAxis.y*(offset/Math.max(Math.hypot(crossAxis.x,crossAxis.y,crossAxis.z),1))*0.92,
-              z:origin.z+crossAxis.z*(offset/Math.max(Math.hypot(crossAxis.x,crossAxis.y,crossAxis.z),1))*0.92};
-    const p2={x:p1.x+grainAxis.x,y:p1.y+grainAxis.y,z:p1.z+grainAxis.z};
+  if(pal.wood){
+    // Direction follows the visible board's long dimension.
+    const horizontal = w >= h;
+    const count=clamp(Math.round((horizontal?w:h)/24),8,46);
 
-    const q1=projectPerspective(p1,scale,cx,cy,camDist);
-    const q2=projectPerspective(p2,scale,cx,cy,camDist);
-    ctx.beginPath();
-    ctx.moveTo(q1.x,q1.y);
-    const mx=(q1.x+q2.x)/2 + Math.sin(i*1.7)*wiggle;
-    const my=(q1.y+q2.y)/2 + Math.cos(i*1.3)*wiggle;
-    ctx.quadraticCurveTo(mx,my,q2.x,q2.y);
-    ctx.strokeStyle = i%5===0 ? "rgba(72,39,22,.24)" : "rgba(70,42,25,.12)";
-    ctx.lineWidth = i%7===0 ? 1.35 : .75;
-    ctx.stroke();
+    for(let i=0;i<count;i++){
+      const t=(i+1)/(count+1);
+      ctx.beginPath();
+
+      if(horizontal){
+        const y=minY+t*h;
+        ctx.moveTo(minX-20,y);
+        const amp=Math.max(0.6,Math.min(3.8,h*.012));
+        const segments=9;
+        for(let j=1;j<=segments;j++){
+          const x=minX+(w+40)*(j/segments);
+          const yy=y+Math.sin(j*.9+i*.63)*amp + Math.sin(j*2.1+i*.11)*amp*.35;
+          ctx.lineTo(x,yy);
+        }
+      }else{
+        const x=minX+t*w;
+        ctx.moveTo(x,minY-20);
+        const amp=Math.max(0.6,Math.min(3.8,w*.012));
+        const segments=9;
+        for(let j=1;j<=segments;j++){
+          const y=minY+(h+40)*(j/segments);
+          const xx=x+Math.sin(j*.9+i*.67)*amp + Math.sin(j*2.0+i*.17)*amp*.35;
+          ctx.lineTo(xx,y);
+        }
+      }
+
+      ctx.strokeStyle=i%6===0 ? "rgba(64,38,23,.24)" : "rgba(70,45,29,.105)";
+      ctx.lineWidth=i%9===0 ? 1.25 : .7;
+      ctx.stroke();
+    }
+
+    // Tiny pores and subtle knots, still clipped.
+    ctx.fillStyle="rgba(58,38,25,.12)";
+    const dots=Math.round(count*2.2);
+    for(let i=0;i<dots;i++){
+      const px=minX+(i*37.17%w), py=minY+(i*61.31%h);
+      const rr=.5+(i%3)*.22;
+      ctx.beginPath();ctx.ellipse(px,py,rr,rr*.6,0,0,Math.PI*2);ctx.fill();
+    }
+
+    // Very soft highlight at one edge to mimic a coated board.
+    const gloss=ctx.createLinearGradient(minX,minY,maxX,maxY);
+    gloss.addColorStop(0,"rgba(255,255,255,.06)");
+    gloss.addColorStop(.5,"rgba(255,255,255,0)");
+    gloss.addColorStop(1,"rgba(0,0,0,.05)");
+    ctx.fillStyle=gloss;
+    ctx.fillRect(minX-10,minY-10,w+20,h+20);
+  }else{
+    // Matte laminated/MDF surface: restrained microtone with no fake wood grain.
+    ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},.025)`;
+    ctx.fillRect(minX-10,minY-10,w+20,h+20);
   }
-
-  // Fine pores/noise, deterministic enough and cheap.
-  const dots=Math.round(tp.count*3.2);
-  ctx.fillStyle="rgba(45,30,20,.11)";
-  for(let i=0;i<dots;i++){
-    const t=(i*0.61803398875)%1;
-    const s=(i*0.38196601125)%1;
-    const p={x:origin.x+grainAxis.x*t+crossAxis.x*(s-.5),
-             y:origin.y+grainAxis.y*t+crossAxis.y*(s-.5),
-             z:origin.z+grainAxis.z*t+crossAxis.z*(s-.5)};
-    const q=projectPerspective(p,scale,cx,cy,camDist);
-    ctx.beginPath();ctx.arc(q.x,q.y,.65,0,Math.PI*2);ctx.fill();
-  }
-
   ctx.restore();
 }
 
-function draw3D(data){
+function render3D(data){
   if(!canvas)return;
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const rect=canvas.getBoundingClientRect();
   const W=Math.max(280,rect.width), H=Math.max(320,rect.height);
-  canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);
+  canvas.width=Math.floor(W*dpr);
+  canvas.height=Math.floor(H*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-
   ctx.clearRect(0,0,W,H);
 
-  // Ground shadow.
+  // Soft floor shadow independent of model projection.
   ctx.save();
-  ctx.fillStyle="rgba(0,0,0,.10)";
-  ctx.filter="blur(7px)";
+  ctx.fillStyle="rgba(0,0,0,.09)";
+  ctx.filter="blur(8px)";
   ctx.beginPath();
-  ctx.ellipse(W/2+view.panX,H*.87+view.panY,Math.min(W*.28,290)*view.zoom,Math.min(H*.06,40)*view.zoom,0,0,Math.PI*2);
+  ctx.ellipse(W/2+view.panX,H*.86+view.panY,Math.min(W*.28,300)*Math.min(view.zoom,1.6),Math.min(H*.055,36)*Math.min(view.zoom,1.6),0,0,Math.PI*2);
   ctx.fill();
   ctx.restore();
 
-  const camera=computeCamera(data,W,H);
-  const cx=W/2+view.panX, cy=H/2+view.panY+20;
+  const rawVerts=data.parts.flatMap(vertices);
+  const rotated=rawVerts.map(rotateWorld);
+  const camera=fitPerspective(rotated,W,H);
 
+  const cx=W/2, cy=H/2+10;
   const pal=palette();
   const faces=[];
 
+  // Transform every face with exactly the same fitted camera.
   for(const part of data.parts){
     const vv=vertices(part);
     for(const fd of FACE_DEFS){
-      const projected=fd.idx.map(i=>projectPerspective(vv[i],camera.scale,cx,cy,camera.camDist));
+      const worldFace=fd.idx.map(i=>rotateWorld(vv[i]));
+      const projected=worldFace.map(v=>projectPerspective(v,camera,cx,cy));
       const depth=projected.reduce((a,p)=>a+p.depth,0)/projected.length;
       faces.push({projected,depth,axis:fd.axis,part});
     }
   }
 
-  // Back-to-front painter's algorithm in perspective space.
+  // Painter's algorithm.
   faces.sort((a,b)=>a.depth-b.depth);
+
+  const light={front:0,right:-11,left:-5,top:17,bottom:-14,back:-8};
 
   for(const face of faces){
     beginPathPoly(ctx,face.projected);
-
-    const light={
-      front:-2,right:-9,left:-4,top:16,bottom:-14,back:-6
-    }[face.axis]||0;
-
-    ctx.fillStyle = shadeColor(pal.base,light);
+    ctx.fillStyle=shadeColor(pal.base,light[face.axis]||0);
     ctx.fill();
-
-    // Realistic wood grain or matte microtexture.
-    if(pal.wood){
-      drawWoodGrain(ctx,face.axis?face:face,face.part,face.projected,pal,camera.scale,cx,cy,camera.camDist);
-    }else{
-      // Fine surface variation for MDF/melamine/fibroplus.
-      ctx.save();
-      beginPathPoly(ctx,face.projected);
-      ctx.clip();
-      const rgb=hexToRgb(pal.base);
-      const g=ctx.createLinearGradient(0,0,face.projected[0].x,face.projected[2].y);
-      g.addColorStop(0,`rgba(${rgb.r},${rgb.g},${rgb.b},.03)`);
-      g.addColorStop(1,`rgba(0,0,0,${pal.noise||.03})`);
-      ctx.fillStyle=g;ctx.fill();
-      ctx.restore();
-    }
-
+    drawFaceTexture(ctx,face.projected,face.part,pal,face.axis);
     ctx.strokeStyle=pal.edge;
     ctx.lineWidth=1;
     beginPathPoly(ctx,face.projected);
     ctx.stroke();
   }
 
-  // Crisp construction edges on the front-most pieces.
+  // Construction lines remain crisp.
   ctx.save();
-  ctx.strokeStyle="rgba(35,32,28,.28)";
+  ctx.strokeStyle="rgba(30,28,25,.27)";
   ctx.lineWidth=.75;
   for(const p of data.parts.filter(x=>x.type==="divider"||x.type==="shelf")){
-    const vv=vertices(p), q=[vv[0],vv[1],vv[2],vv[3]].map(v=>projectPerspective(v,camera.scale,cx,cy,camera.camDist));
+    const q=vertices(p).slice(0,4).map(v=>projectPerspective(rotateWorld(v),camera,cx,cy));
     beginPathPoly(ctx,q);ctx.stroke();
   }
   ctx.restore();
 }
 
-function render3D(data){ draw3D(data); }
+// Interactive 3D controls.
+canvas=$("viewerCanvas");
+ctx=canvas.getContext("2d");
 
 function resetView(){
   view={yaw:-0.72,pitch:0.34,zoom:1,panX:0,panY:0};
   updateAll();
 }
-
-canvas=$("viewerCanvas");
-ctx=canvas.getContext("2d");
-
 $("resetView").addEventListener("click",resetView);
 
-// Mouse/touch orbit controls.
-// Drag = orbit. Shift+drag = pan. Wheel/pinch = zoom.
 canvas.addEventListener("pointerdown",e=>{
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   canvas.setPointerCapture?.(e.pointerId);
@@ -627,25 +613,28 @@ canvas.addEventListener("pointermove",e=>{
   if(activePointers.size===2){
     const pts=[...activePointers.values()];
     const d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
-    if(pinchDistance) view.zoom=clamp(view.zoom*(d/pinchDistance),.45,3.1);
+    if(pinchDistance) view.zoom=clamp(view.zoom*(d/pinchDistance),.55,2.4);
     pinchDistance=d;
     updateAll();
     return;
   }
 
   if(!dragMode)return;
-
   const dx=e.clientX-lastPointer.x, dy=e.clientY-lastPointer.y;
   lastPointer={x:e.clientX,y:e.clientY};
 
   if(dragMode==="pan"){
-    view.panX+=dx;view.panY+=dy;
+    view.panX=clamp(view.panX+dx,-WMax(canvas)*.8,WMax(canvas)*.8);
+    view.panY=clamp(view.panY+dy,-HMax(canvas)*.8,HMax(canvas)*.8);
   }else{
-    view.yaw+=dx*.009;
-    view.pitch=clamp(view.pitch+dy*.009,-1.42,1.42);
+    view.yaw+=dx*.0085;
+    view.pitch=clamp(view.pitch+dy*.0085,-1.36,1.36);
   }
   updateAll();
 });
+
+function WMax(c){ return c.getBoundingClientRect().width || 1000; }
+function HMax(c){ return c.getBoundingClientRect().height || 600; }
 
 function endPointer(e){
   activePointers.delete(e.pointerId);
@@ -660,7 +649,7 @@ canvas.addEventListener("pointercancel",endPointer);
 
 canvas.addEventListener("wheel",e=>{
   e.preventDefault();
-  view.zoom=clamp(view.zoom*Math.exp(-e.deltaY*.001),.45,3.1);
+  view.zoom=clamp(view.zoom*Math.exp(-e.deltaY*.001),.55,2.4);
   updateAll();
 },{passive:false});
 
