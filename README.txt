@@ -1,5 +1,7 @@
-V1.5
-Versión autocontenida para GitHub Pages.
-Base de materiales y cálculo no dependen del visor.
-El visor usa SVG 3D axonométrico sin librerías externas.
+V1.6
+index.html: Cálculo de mueble
+materiales.html: Base de materiales
+catalog.js: catálogo compartido
+app.js: cálculo y visor 3D Canvas sin dependencias externas
+materials.js: base de materiales independiente
 Los datos se guardan en localStorage del navegador.

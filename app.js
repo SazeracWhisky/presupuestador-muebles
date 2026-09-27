@@ -1,436 +1,281 @@
-'use strict';
 
-/*
-  Presupuestador de Muebles V1.4
-  - Catálogo maestro: define materiales, variantes y grosores disponibles.
-  - Precios: se guardan en localStorage y son editables.
-  - Calculador: usa catálogo maestro aunque todavía no haya precios cargados.
-  - Visor: proyección 3D axonométrica propia en Canvas, sin dependencias externas.
-*/
-
-const $ = (id) => document.getElementById(id);
-const MATERIALS_KEY = 'presupuestador_materiales_v3';
-const SETTINGS_KEY = 'presupuestador_settings_v1';
-
-const CATALOG = [
-  { id:'melamina_aglomerado', label:'Melamina Aglomerado', variants:['Blanco','Negro','Cedro'], thicknesses:[10,12,15,18] },
-  { id:'melamina_mdf', label:'Melamina MDF', variants:['Blanco','Cedro','Roble Americano','Roble Dakar'], thicknesses:[12,15,18] },
-  { id:'mdf', label:'MDF', variants:[], thicknesses:[3,5,9,12,15,18,25] },
-  { id:'fibroplus', label:'Fibroplus', variants:['Blanco','Negro','Cedro'], thicknesses:[3,5] },
-  { id:'pino', label:'Pino', variants:[], thicknesses:[18,22] },
-  { id:'eucaliptu', label:'Eucaliptu', variants:[], thicknesses:[20,30] },
-  { id:'fenolico', label:'Fenólico', variants:[], thicknesses:[6,8,10,12,15,18] },
-  { id:'terciado_pino', label:'Terciado Pino', variants:[], thicknesses:[3] },
-  { id:'enchapado_aglomerado', label:'Enchapado Aglomerado', variants:['Cedro','Cerejeira','Paraíso','Guatambú'], thicknesses:[] }
+(() => {
+"use strict";
+const $=id=>document.getElementById(id);
+const money=v=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(Number(v)||0);
+let records=window.readMaterials();
+let selected={family:"",variant:"",thickness:"",recordId:""};
+let dividers=[{id:uid(),position:470}];
+let shelves=[
+  {id:uid(),section:0,height:350},
+  {id:uid(),section:1,height:235},
+  {id:uid(),section:1,height:470}
 ];
+let view={yaw:-0.72,pitch:0.42,zoom:1,panX:0,panY:0};
+let canvas,ctx,drag=false,dragMode="rotate",last={x:0,y:0},activePointers=new Map(),pinchDistance=0;
 
-const state = {
-  materials: [],
-  selectedFamilyId: '',
-  selectedVariant: '',
-  selectedMaterialId: '',
-  dividers: [{ id:uid(), position:470 }],
-  shelves: [
-    { id:uid(), section:0, height:350 },
-    { id:uid(), section:1, height:235 },
-    { id:uid(), section:1, height:470 }
-  ],
-  minimumPieceCost: 4000,
-  roundingUnit: 1000,
-  view: { yaw: -0.62, pitch: 0.48, zoom: 1 }
-};
-
-const inputIds = ['width','height','depth','waste'];
-const els = Object.fromEntries(inputIds.map(id => [id, $(id)]));
-
-function uid(){ return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
-function num(id){ return Number(els[id]?.value) || 0; }
-function money(v){ return Number.isFinite(v) ? new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(v) : '—'; }
-function esc(v){ return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-function cat(id){ return CATALOG.find(m=>m.id===id) || null; }
-
-function canonicalName(rec){
-  const m=cat(rec?.materialId);
-  if(!m) return rec?.name || '';
-  return rec.variant ? `${m.label} · ${rec.variant}` : m.label;
-}
-
-function normalizeRecord(raw){
-  if(!raw || typeof raw!=='object') return null;
-  const materialId=String(raw.materialId||'');
-  const material=cat(materialId);
-  if(!material) return null;
-  const variant=material.variants.includes(raw.variant) ? String(raw.variant) : '';
-  const thickness=Number(raw.thickness);
-  const price=Number(raw.price);
-  if(!Number.isFinite(thickness) || thickness<=0 || !Number.isFinite(price) || price<0) return null;
-  if(material.thicknesses.length && !material.thicknesses.includes(thickness)) return null;
-  return {id:raw.id||uid(),materialId,variant,name:canonicalName({materialId,variant}),thickness,price};
-}
-
-function dedupe(records){
-  const map=new Map();
-  for(const raw of records){
-    const r=normalizeRecord(raw); if(!r) continue;
-    map.set(`${r.materialId}|${r.variant}|${r.thickness}`,r);
-  }
-  return [...map.values()];
-}
-
-function loadMaterials(){
-  const keys=[MATERIALS_KEY,'presupuestador_materiales_v2','presupuestador_materiales_v1'];
-  for(const key of keys){
-    try{
-      const raw=JSON.parse(localStorage.getItem(key)||'null');
-      if(Array.isArray(raw)){
-        const clean=dedupe(raw);
-        if(clean.length) return clean;
-      }
-    }catch{}
-  }
-  // Primer registro de demostración basado en un precio que ya definimos.
-  return [{id:uid(),materialId:'mdf',variant:'',name:'MDF',thickness:15,price:48000}];
-}
-
-function saveMaterials(){ localStorage.setItem(MATERIALS_KEY,JSON.stringify(state.materials)); }
-function loadSettings(){ try{return JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')||{};}catch{return{};} }
-function saveSettings(){ localStorage.setItem(SETTINGS_KEY,JSON.stringify({minimumPieceCost:state.minimumPieceCost,roundingUnit:state.roundingUnit})); }
-
-state.materials=loadMaterials();
-const settings=loadSettings();
-state.minimumPieceCost=Number.isFinite(Number(settings.minimumPieceCost))?Number(settings.minimumPieceCost):4000;
-state.roundingUnit=Number.isFinite(Number(settings.roundingUnit))&&Number(settings.roundingUnit)>0?Number(settings.roundingUnit):1000;
-saveMaterials();
-
-function catalogHasRecords(id){ return state.materials.some(m=>m.materialId===id); }
-function currentMaterial(){ return state.materials.find(m=>m.id===state.selectedMaterialId) || null; }
-function rowsForFamily(){ return state.materials.filter(m=>m.materialId===state.selectedFamilyId && (!state.selectedVariant || m.variant===state.selectedVariant)); }
-function priceRecord(){
-  if(!state.selectedFamilyId) return null;
-  const m=cat(state.selectedFamilyId); if(!m) return null;
-  const variantRequired=m.variants.length>0;
-  if(variantRequired && !state.selectedVariant) return null;
-  if(!state.selectedMaterialId) return null;
-  return currentMaterial();
-}
-
-function setOptions(select, items, placeholder, value=''){
-  if(!select) return;
-  select.replaceChildren(new Option(placeholder,'',true,!value));
+function uid(){return window.uid?window.uid():`${Date.now()}-${Math.random()}`;}
+function family(){return window.getCatalog(selected.family)}
+function rec(){return records.find(r=>r.id===selected.recordId)||null}
+function materialVariantRequired(){return !!family()?.variants.length}
+function setOptions(select,items,placeholder,value=""){
+  select.replaceChildren(new Option(placeholder,"",true,!value));
   items.forEach(x=>select.add(new Option(x.label,x.value)));
-  select.value=value;
+  if(value!=="" && value!=null)select.value=String(value);
 }
+function refreshRecords(){records=window.readMaterials();}
 
-function renderCalculatorMaterials(){
-  const family=$('materialFamilySelect');
-  if(!family) return;
-  const previous=state.selectedFamilyId;
-  setOptions(family,CATALOG.map(m=>({label:m.label,value:m.id})),'Seleccionar material...',previous);
-  state.selectedFamilyId=CATALOG.some(m=>m.id===previous)?previous:'';
-  family.value=state.selectedFamilyId;
-  if(!state.selectedFamilyId){state.selectedVariant='';state.selectedMaterialId='';}
-  renderCalcVariants();
-}
-
-function renderCalcVariants(){
-  const family=cat(state.selectedFamilyId);
-  const select=$('materialVariantSelect');
-  const label=$('calcVariantLabel');
-  if(!select) return;
-  if(!family?.variants.length){
-    select.replaceChildren(new Option('Sin variante','',true,true)); select.disabled=true; label?.classList.add('hidden'); state.selectedVariant='';
-  }else{
-    const keep=family.variants.includes(state.selectedVariant)?state.selectedVariant:'';
-    setOptions(select,family.variants.map(v=>({label:v,value:v})),'Seleccionar color / variante...',keep);
-    select.disabled=false; label?.classList.remove('hidden'); state.selectedVariant=keep;
-  }
-  renderCalcThicknesses();
-}
-
-function renderCalcThicknesses(){
-  const family=cat(state.selectedFamilyId);
-  const select=$('materialThicknessSelect');
-  const label=$('calcThicknessLabel');
-  if(!select) return;
-  if(!family){
-    setOptions(select,[],'Seleccioná un material primero...'); select.disabled=true; label?.classList.add('hidden'); state.selectedMaterialId=''; updateSelectedMaterialUI(); return;
-  }
-  if(family.variants.length && !state.selectedVariant){
-    setOptions(select,[],'Seleccioná un color / variante primero...'); select.disabled=true; label?.classList.remove('hidden'); state.selectedMaterialId=''; updateSelectedMaterialUI(); return;
-  }
-  if(!family.thicknesses.length){
-    setOptions(select,[],'Grosor pendiente de definir...'); select.disabled=true; label?.classList.remove('hidden'); state.selectedMaterialId=''; updateSelectedMaterialUI(); return;
-  }
-  const matches=rowsForFamily();
-  const previous=state.selectedMaterialId;
-  const options=family.thicknesses.map(mm=>{
-    const rec=matches.find(r=>Number(r.thickness)===mm);
-    return {label:`${mm} mm${rec?'':' · precio pendiente'}`,value:rec?.id||`missing:${mm}`};
+function initMaterialSelectors(){
+  setOptions($("materialSelect"),window.MATERIAL_CATALOG.map(m=>({label:m.label,value:m.id})),"Seleccionar material...");
+  $("materialSelect").addEventListener("change",()=>{
+    selected.family=$("materialSelect").value; selected.variant=""; selected.thickness=""; selected.recordId="";
+    renderVariant(); renderThickness(); renderSelected(); updateAll();
   });
-  setOptions(select,options,'Seleccionar grosor...',previous);
-  select.disabled=false; label?.classList.remove('hidden');
-  const found=matches.find(r=>r.id===previous);
-  state.selectedMaterialId=found?.id||'';
-  select.value=found?.id||'';
-  updateSelectedMaterialUI();
+  $("variantSelect").addEventListener("change",()=>{
+    selected.variant=$("variantSelect").value; selected.thickness=""; selected.recordId="";
+    renderThickness(); renderSelected(); updateAll();
+  });
+  $("thicknessSelect").addEventListener("change",()=>{
+    selected.thickness=String($("thicknessSelect").value||""); refreshRecords();
+    const r=records.find(x=>x.materialId===selected.family&&(x.variant||"")===selected.variant&&Number(x.thickness)===Number(selected.thickness));
+    selected.recordId=r?.id||"";
+    renderSelected(); updateAll();
+  });
+}
+function renderVariant(){
+  const f=family(), wrap=$("variantWrap"), sel=$("variantSelect");
+  if(!f){wrap.classList.add("hidden");sel.disabled=true;setOptions(sel,[],"Seleccionar color / variante...");return;}
+  if(f.variants.length){
+    wrap.classList.remove("hidden");sel.disabled=false;setOptions(sel,f.variants.map(v=>({label:v,value:v})),"Seleccionar color / variante...",selected.variant);
+  }else{
+    wrap.classList.add("hidden");sel.disabled=true;sel.replaceChildren(new Option("Sin variante","",true,true));selected.variant="";
+  }
+}
+function renderThickness(){
+  const f=family(), wrap=$("thicknessWrap"), sel=$("thicknessSelect");
+  if(!f){wrap.classList.add("hidden");sel.disabled=true;setOptions(sel,[],"Seleccionar grosor...");return;}
+  if(f.variants.length && !selected.variant){
+    wrap.classList.remove("hidden");sel.disabled=true;setOptions(sel,[],"Seleccioná un color / variante primero...");
+    return;
+  }
+  let ts=Array.isArray(f.thicknesses)?[...f.thicknesses]:[];
+  if(!ts.length){
+    const list=records.filter(r=>r.materialId===f.id&&(r.variant||"")===selected.variant).map(r=>Number(r.thickness));
+    ts=[...new Set(list)].sort((a,b)=>a-b);
+  }
+  wrap.classList.remove("hidden");
+  if(ts.length){
+    setOptions(sel,ts.map(t=>({label:`${t} mm`,value:String(t)})),"Seleccionar grosor...",selected.thickness);
+    sel.disabled=false;
+  }else{
+    setOptions(sel,[],"Grosor pendiente de definir...");
+    sel.disabled=true;
+  }
+}
+function renderSelected(){
+  const r=rec(), f=family(), variant=selected.variant?` · ${selected.variant}`:"";
+  $("thicknessCard").classList.toggle("hidden",!selected.thickness);
+  $("priceCard").classList.toggle("hidden",!selected.thickness);
+  $("selectedThickness").textContent=selected.thickness?`${selected.thickness} mm`:"—";
+  $("selectedPrice").textContent=selected.thickness?(r?`${money(r.price)}/m²`:"Precio pendiente"):"—";
+  $("materialStatus").textContent=selected.thickness?`${f?.label||""}${variant} · ${selected.thickness} mm`:"Material no seleccionado";
+  $("viewerMaterial").textContent=selected.thickness?`${f?.label||""}${variant} · ${selected.thickness} mm`:f?`${f.label}${variant}`:"Sin material";
 }
 
-function updateSelectedMaterialUI(){
-  const rec=priceRecord();
-  const thickCard=$('selectedThicknessCard'), priceCard=$('selectedPriceCard');
-  thickCard?.classList.toggle('hidden',!rec);
-  priceCard?.classList.toggle('hidden',!rec);
-  $('selectedThickness').textContent=rec?`${rec.thickness} mm`:'—';
-  $('selectedPrice').textContent=rec?`${money(rec.price)}/m²`:'—';
-  const family=cat(state.selectedFamilyId);
-  const chosenVariant=state.selectedVariant ? ` · ${state.selectedVariant}` : '';
-  $('materialStatus').textContent=rec?`${family?.label||''}${chosenVariant} · ${rec.thickness} mm`:'Material no seleccionado';
-  $('viewerMaterial').textContent=rec?`${family?.label||''}${chosenVariant} · ${rec.thickness} mm`:(family?`${family.label}${chosenVariant}`:'Sin material');
-}
-
-function dims(){
-  const W=num('width'),H=num('height'),D=num('depth'),T=Number(currentMaterial()?.thickness)||18;
-  return {W,H,D,T,innerW:Math.max(W-2*T,0),innerH:Math.max(H-2*T,0)};
-}
-function normalizeDividers(model){
-  const max=Math.max(model.innerW-model.T,0);
-  state.dividers=state.dividers.map(d=>({...d,position:Math.min(Math.max(Number(d.position)||0,0),max)})).sort((a,b)=>a.position-b.position);
+function dims(){return {W:+$("width").value||670,H:+$("height").value||860,D:+$("depth").value||430,T:Number(selected.thickness)||18}}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function normalize(model){
+  const innerW=Math.max(model.W-2*model.T,0), maxDiv=Math.max(innerW-model.T,0);
+  dividers=dividers.map(d=>({...d,position:clamp(+d.position||0,0,maxDiv)})).sort((a,b)=>a.position-b.position);
 }
 function sections(model){
-  normalizeDividers(model);
-  const edges=[0,...state.dividers.map(d=>d.position),model.innerW];
+  normalize(model); const innerW=Math.max(model.W-2*model.T,0), edges=[0,...dividers.map(d=>d.position),innerW];
   const out=[];
   for(let i=0;i<edges.length-1;i++){
-    const left=i===0?0:edges[i]+model.T;
-    const right=i===edges.length-2?model.innerW:edges[i+1];
-    out.push({index:i,left,right,width:Math.max(right-left,0)});
+    const left=i===0?0:edges[i]+model.T, right=i===edges.length-2?innerW:edges[i+1];
+    out.push({index:i,left,right,width:Math.max(0,right-left)});
   }
   return out;
 }
+function getParts(){
+  const m=dims(), ss=sections(m), p=[];
+  p.push({name:"Lateral izquierdo",w:m.T,h:m.H,d:m.D,x:-m.W/2+m.T/2,y:0,z:0,type:"outer"});
+  p.push({name:"Lateral derecho",w:m.T,h:m.H,d:m.D,x:m.W/2-m.T/2,y:0,z:0,type:"outer"});
+  p.push({name:"Tapa",w:Math.max(m.W-2*m.T,0),h:m.T,d:m.D,x:0,y:m.H/2-m.T/2,z:0,type:"horizontal"});
+  p.push({name:"Base",w:Math.max(m.W-2*m.T,0),h:m.T,d:m.D,x:0,y:-m.H/2+m.T/2,z:0,type:"horizontal"});
+  dividers.forEach((d,i)=>{
+    const x=-m.W/2+m.T+d.position+m.T/2;
+    p.push({name:`División vertical ${i+1}`,w:m.T,h:Math.max(m.H-2*m.T,0),d:m.D,x,y:0,z:0,type:"divider"});
+  });
+  shelves.forEach((s,i)=>{
+    const sec=ss[clamp(Math.round(+s.section||0),0,ss.length-1)];
+    const h=clamp(+s.height||0,0,Math.max(m.H-2*m.T,0)-m.T);
+    const y=-m.H/2+m.T+h+m.T/2;
+    p.push({name:`Estante ${i+1}`,w:sec.width,h:m.T,d:m.D,x:-m.W/2+m.T+sec.left+sec.width/2,y,z:0,type:"shelf",section:sec.index});
+  });
+  return {model:m,sections:ss,parts:p};
+}
 function roundingCost(raw){
-  const min=Math.max(Number(state.minimumPieceCost)||0,0), unit=Math.max(Number(state.roundingUnit)||1,1);
-  if(raw<=0)return 0;
-  return Math.ceil(Math.max(raw,min)/unit)*unit;
+  let s={minimumPieceCost:4000,roundingUnit:1000};
+  try{s={...s,...JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}")};}catch{}
+  const min=Math.max(+s.minimumPieceCost||0,0),unit=Math.max(+s.roundingUnit||1,1);
+  return raw<=0?0:Math.ceil(Math.max(raw,min)/unit)*unit;
 }
-
-function getModel(){
-  const model=dims(), secs=sections(model), parts=[];
-  if(!model.W||!model.H||!model.D||!model.T)return {...model,sections:secs,parts};
-  parts.push({name:'Lateral izquierdo',qty:1,w:model.T,h:model.H,d:model.D,x:-model.W/2+model.T/2,y:0,z:0,type:'panel'});
-  parts.push({name:'Lateral derecho',qty:1,w:model.T,h:model.H,d:model.D,x:model.W/2-model.T/2,y:0,z:0,type:'panel'});
-  parts.push({name:'Tapa',qty:1,w:model.innerW,h:model.T,d:model.D,x:0,y:model.H/2-model.T/2,z:0,type:'panel'});
-  parts.push({name:'Base',qty:1,w:model.innerW,h:model.T,d:model.D,x:0,y:-model.H/2+model.T/2,z:0,type:'panel'});
-  state.dividers.forEach((d,i)=>{
-    const xLeft=-model.innerW/2+d.position;
-    parts.push({name:`División vertical ${i+1}`,qty:1,w:model.T,h:model.innerH,d:model.D,x:xLeft+model.T/2,y:0,z:0,type:'divider'});
-  });
-  state.shelves.forEach((s,i)=>{
-    const sec=secs[Math.min(Math.max(Math.round(Number(s.section)||0),0),Math.max(secs.length-1,0))];
-    const height=Math.min(Math.max(Number(s.height)||0,0),Math.max(model.innerH-model.T,0));
-    const y=-model.H/2+model.T+height+model.T/2;
-    parts.push({name:`Estante ${i+1}`,qty:1,w:sec.width,h:model.T,d:model.D,x:-model.innerW/2+sec.left+sec.width/2,y,z:0,type:'shelf',section:sec.index});
-  });
-  return {...model,sections:secs,parts};
+function updateAll(){
+  refreshRecords();
+  const data=getParts(), r=rec(), hasPrice=!!r;
+  let area=0,cost=0;
+  $("partsBody").innerHTML=data.parts.map(p=>{
+    const a=p.w*p.d/1e6; area+=a; const line=hasPrice?roundingCost(a*r.price):null; if(line!=null)cost+=line;
+    return `<tr><td>${p.name}</td><td>1</td><td>${p.w.toFixed(0)} × ${p.d.toFixed(0)} mm</td><td>${a.toFixed(3)} m²</td><td>${line==null?"—":money(line)}</td></tr>`;
+  }).join("");
+  const waste=+($("waste").value||0), areaWaste=area*(1+waste/100);
+  $("areaM2").textContent=area?`${area.toFixed(3)} m²`:"—";
+  $("areaWaste").textContent=area?`${areaWaste.toFixed(3)} m²`:"—";
+  $("priceM2Label").textContent=hasPrice?`${money(r.price)} / m²`:"Precio pendiente";
+  $("materialCost").textContent=hasPrice?money(cost):"—";
+  $("totalCost").textContent=hasPrice?money(cost):"—";
+  $("budgetNote").textContent=hasPrice?"El costo aplica mínimo por pieza y redondeo del proveedor.":"Podés configurar el mueble sin precio; para calcular costo cargá esta combinación en Base de materiales.";
+  $("innerWidth").textContent=`${Math.max(data.model.W-2*data.model.T,0).toFixed(0)} mm`;
+  $("innerHeight").textContent=`${Math.max(data.model.H-2*data.model.T,0).toFixed(0)} mm`;
+  $("dividerCount").textContent=dividers.length;
+  $("shelfCount").textContent=shelves.length;
+  $("viewerDimensions").textContent=`${data.model.W} × ${data.model.H} × ${data.model.D} mm`;
+  const st={minimumPieceCost:4000,roundingUnit:1000}; try{Object.assign(st,JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}"))}catch{}
+  $("ruleMin").textContent=money(st.minimumPieceCost);$("ruleRound").textContent=money(st.roundingUnit);
+  const warnings=data.sections.filter(s=>s.width<100).map(s=>`Módulo ${s.index+1} tiene ${s.width.toFixed(0)} mm libres.`); $("modelWarning").textContent=warnings.join(" "); $("modelWarning").classList.toggle("hidden",!warnings.length);
+  render3D(data);
 }
-
 function renderComponents(){
-  const model=dims(); normalizeDividers(model);
-  const db=$('dividersList'), sb=$('shelvesList');
-  if(db)db.innerHTML=state.dividers.length?state.dividers.map((d,i)=>`<div class="component-row"><label>División ${i+1}<div class="input-with-unit"><input class="divider-position" data-id="${esc(d.id)}" type="number" min="0" max="${Math.max(model.innerW-model.T,0)}" step="1" value="${Math.round(d.position)}"><span>mm</span></div></label><button type="button" class="danger-btn remove-divider" data-id="${esc(d.id)}">Eliminar</button></div>`).join(''):'<div class="empty-mini">No hay divisiones.</div>';
-  const secs=sections(model);
-  if(sb)sb.innerHTML=state.shelves.length?state.shelves.map((s,i)=>`<div class="component-row shelf-row"><label>Estante ${i+1}<div class="input-with-unit"><input class="shelf-height" data-id="${esc(s.id)}" type="number" min="0" max="${Math.max(model.innerH-model.T,0)}" step="1" value="${Math.round(s.height)}"><span>mm desde base</span></div></label><label>Módulo<select class="shelf-section" data-id="${esc(s.id)}">${secs.map(sec=>`<option value="${sec.index}" ${sec.index===s.section?'selected':''}>${sec.index+1} · ${Math.round(sec.width)} mm libres</option>`).join('')}</select></label><button type="button" class="danger-btn remove-shelf" data-id="${esc(s.id)}">Eliminar</button></div>`).join(''):'<div class="empty-mini">No hay estantes.</div>';
+  const m=dims(),ss=sections(m);
+  $("dividersList").innerHTML=dividers.map((d,i)=>`
+    <div class="component-row"><label>División ${i+1}<div class="input-with-unit"><input class="divPos" data-id="${d.id}" type="number" min="0" max="${Math.max(m.W-2*m.T-m.T,0)}" value="${Math.round(d.position)}"><span>mm</span></div></label>
+    <button class="danger-btn remDiv" data-id="${d.id}" type="button">Eliminar</button></div>`).join("")||'<div class="empty-mini">No hay divisiones.</div>';
+  $("shelvesList").innerHTML=shelves.map((s,i)=>`
+    <div class="component-row shelf-row"><label>Estante ${i+1}<div class="input-with-unit"><input class="shelfH" data-id="${s.id}" type="number" min="0" value="${Math.round(s.height)}"><span>mm</span></div></label>
+    <label>Módulo<select class="shelfS" data-id="${s.id}">${ss.map(sec=>`<option value="${sec.index}" ${sec.index===s.section?"selected":""}>${sec.index+1} · ${Math.round(sec.width)} mm libres</option>`).join("")}</select></label>
+    <button class="danger-btn remShelf" data-id="${s.id}" type="button">Eliminar</button></div>`).join("")||'<div class="empty-mini">No hay estantes.</div>';
 }
+$("addDivider").addEventListener("click",()=>{const m=dims();dividers.push({id:uid(),position:Math.min(300,Math.max(m.W-3*m.T,0))});renderComponents();updateAll();});
+$("addShelf").addEventListener("click",()=>{shelves.push({id:uid(),section:0,height:300});renderComponents();updateAll();});
+$("dividersList").addEventListener("change",e=>{const el=e.target.closest(".divPos");if(!el)return;const d=dividers.find(x=>x.id===el.dataset.id);if(d)d.position=+el.value||0;renderComponents();updateAll();});
+$("dividersList").addEventListener("click",e=>{const b=e.target.closest(".remDiv");if(!b)return;dividers=dividers.filter(x=>x.id!==b.dataset.id);shelves=shelves.map(s=>({...s,section:Math.min(s.section,dividers.length)}));renderComponents();updateAll();});
+$("shelvesList").addEventListener("change",e=>{
+  const h=e.target.closest(".shelfH"), s=e.target.closest(".shelfS");
+  const item=(h||s)&&shelves.find(x=>x.id===(h||s).dataset.id); if(!item)return;
+  if(h)item.height=+h.value||0; if(s)item.section=+s.value||0; renderComponents();updateAll();
+});
+$("shelvesList").addEventListener("click",e=>{const b=e.target.closest(".remShelf");if(!b)return;shelves=shelves.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();});
+["width","height","depth","waste"].forEach(id=>$(id).addEventListener("input",()=>{renderComponents();updateAll();}));
 
-function updateBudget(){
-  const model=getModel(), mat=currentMaterial();
-  const body=$('partsBody'); let area=0,total=0;
-  if(body){
-    body.innerHTML=model.parts.map(p=>{
-      const totalArea=(p.w*p.d*p.qty)/1e6; area+=totalArea;
-      const raw=mat?totalArea*Number(mat.price):NaN; const line=mat?roundingCost(raw):NaN; if(Number.isFinite(line))total+=line;
-      return `<tr><td>${esc(p.name)}</td><td>${p.qty}</td><td>${p.w.toFixed(0)} × ${p.d.toFixed(0)} mm</td><td>${totalArea.toFixed(3)} m²</td><td>${Number.isFinite(line)?money(line):'—'}</td></tr>`;
-    }).join('');
-  }
-  const wastePct=Math.max(0,num('waste')),areaWaste=area*(1+wastePct/100);
-  $('areaM2').textContent=model.parts.length?`${area.toFixed(3)} m²`:'—';
-  $('areaWaste').textContent=model.parts.length?`${areaWaste.toFixed(3)} m²`:'—';
-  $('priceM2Label').textContent=mat?`${money(mat.price)} / m²`:'—';
-  $('materialCost').textContent=mat?money(total):'—';
-  $('totalCost').textContent=mat?money(total):'—';
-  $('innerWidth').textContent=`${model.innerW.toFixed(0)} mm`;
-  $('innerHeight').textContent=`${model.innerH.toFixed(0)} mm`;
-  $('dividerCount').textContent=String(state.dividers.length);
-  $('shelfCount').textContent=String(state.shelves.length);
-  $('viewerDimensions').textContent=`${model.W.toFixed(0)} × ${model.H.toFixed(0)} × ${model.D.toFixed(0)} mm`;
-  const warnings=[];
-  model.sections.forEach(sec=>{if(sec.width<100)warnings.push(`Módulo ${sec.index+1} tiene solo ${sec.width.toFixed(0)} mm de ancho libre.`);});
-  state.shelves.forEach((s,i)=>{if(Number(s.height)>model.innerH-model.T)warnings.push(`El estante ${i+1} está fuera del alto interior.`);});
-  $('modelWarning').textContent=warnings.join(' ');
-  $('modelWarning').classList.toggle('hidden',!warnings.length);
-  $('budgetNote').textContent=mat?`Superficie neta de piezas: ${area.toFixed(3)} m². El costo se calcula por pieza con mínimo de ${money(state.minimumPieceCost)} y redondeo a ${money(state.roundingUnit)}.`:'Elegí una combinación de material, variante y grosor con precio cargado para activar el cálculo.';
-  updateSelectedMaterialUI();
-  render3D();
+// --- Pure canvas 3D ---
+function project(v,scale,cx,cy){
+  let x=v.x,y=v.y,z=v.z;
+  const cyaw=Math.cos(view.yaw), syaw=Math.sin(view.yaw);
+  let rx=x*cyaw-z*syaw, rz=x*syaw+z*cyaw;
+  const cp=Math.cos(view.pitch), sp=Math.sin(view.pitch);
+  const ry=y*cp-rz*sp, rz2=y*sp+rz*cp;
+  return {x:cx+rx*scale+view.panX,y:cy-ry*scale+view.panY,depth:rz2};
 }
-
-/* ---------- Visor 3D axonométrico propio en Canvas ---------- */
-let canvas,ctx,dragging=false,lastPointer={x:0,y:0};
-function colorForMaterial(){
-  const m=currentMaterial();
-  if(!m) return {base:'#d2cfc5',top:'#e4e1d7',side:'#bcb8ad',front:'#cbc7bc'};
-  const v=(m.variant||'').toLowerCase();
-  if(v.includes('negro')) return {base:'#2e2e2e',top:'#4b4b4b',side:'#242424',front:'#353535'};
-  if(v.includes('blanco')) return {base:'#e8e8e5',top:'#f7f7f3',side:'#cfcfca',front:'#e1e1dc'};
-  if(v.includes('roble')||v.includes('cedro')||v.includes('paraíso')||v.includes('guatambú')||v.includes('cerejeira')||m.materialId==='pino'||m.materialId==='eucaliptu') return {base:'#b9875b',top:'#d2a477',side:'#8f6846',front:'#aa7850'};
-  if(m.materialId==='fenolico') return {base:'#6b5b4d',top:'#85705d',side:'#51453c',front:'#665446'};
-  return {base:'#c8c5bb',top:'#dedbd1',side:'#aaa69c',front:'#bfbbb0'};
-}
-function rotatePoint(p){
-  const cy=Math.cos(state.view.yaw),sy=Math.sin(state.view.yaw);
-  let x=p.x*cy-p.z*sy, z=p.x*sy+p.z*cy;
-  const cp=Math.cos(state.view.pitch),sp=Math.sin(state.view.pitch);
-  const y=p.y*cp-z*sp; z=y*0+z*cp+p.y*sp; // overwritten below
-  return {x, y:p.y*cp-(p.x*0+ (p.z*cy+p.x*sy))*sp, z:(p.z*cy+p.x*sy)*cp+p.y*sp};
-}
-function rot(p){
-  const cy=Math.cos(state.view.yaw),sy=Math.sin(state.view.yaw);
-  const x1=p.x*cy-p.z*sy;
-  const z1=p.x*sy+p.z*cy;
-  const cp=Math.cos(state.view.pitch),sp=Math.sin(state.view.pitch);
-  return {x:x1,y:p.y*cp-z1*sp,z:p.y*sp+z1*cp};
-}
-function projectedBounds(parts,w,h){
-  const pts=[];
-  for(const p of parts){
-    for(const sx of [-1,1])for(const sy of [-1,1])for(const sz of [-1,1])pts.push(rot({x:p.x+sx*p.w/2,y:p.y+sy*p.h/2,z:p.z+sz*p.d/2}));
-  }
-  if(!pts.length)return {minX:-1,maxX:1,minY:-1,maxY:1};
-  const minX=Math.min(...pts.map(p=>p.x)),maxX=Math.max(...pts.map(p=>p.x));
-  const minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
-  const range=Math.max(maxX-minX,maxY-minY,1);
-  const scale=Math.min(w,h)*0.72/range*state.view.zoom;
-  return {minX,maxX,minY,maxY,scale,centerX:(minX+maxX)/2,centerY:(minY+maxY)/2};
-}
-function makeFaces(p){
-  const x=p.w/2,y=p.h/2,z=p.d/2,c=[
-    {p:[[-x,-y,-z],[x,-y,-z],[x,y,-z],[-x,y,-z]],shade:'front'},
-    {p:[[-x,-y,z],[-x,y,z],[x,y,z],[x,-y,z]],shade:'side'},
-    {p:[[-x,y,-z],[x,y,-z],[x,y,z],[-x,y,z]],shade:'top'},
-    {p:[[-x,-y,-z],[-x,-y,z],[x,-y,z],[x,-y,-z]],shade:'bottom'},
-    {p:[[-x,-y,-z],[-x,y,-z],[-x,y,z],[-x,-y,z]],shade:'side'},
-    {p:[[x,-y,-z],[x,-y,z],[x,y,z],[x,y,-z]],shade:'front'}
+function verts(p){
+  const x=p.w/2,y=p.h/2,z=p.d/2;
+  return [
+    {x:p.x-x,y:p.y-y,z:p.z-z},{x:p.x+x,y:p.y-y,z:p.z-z},{x:p.x+x,y:p.y+y,z:p.z-z},{x:p.x-x,y:p.y+y,z:p.z-z},
+    {x:p.x-x,y:p.y-y,z:p.z+z},{x:p.x+x,y:p.y-y,z:p.z+z},{x:p.x+x,y:p.y+y,z:p.z+z},{x:p.x-x,y:p.y+y,z:p.z+z}
   ];
-  return c.map(f=>({poly:f.p.map(a=>rot({x:a[0]+p.x,y:a[1]+p.y,z:a[2]+p.z})),shade:f.shade}));
 }
-function render3D(){
-  if(!canvas||!ctx)return;
-  const rect=canvas.getBoundingClientRect(),dpr=Math.min(globalThis.devicePixelRatio||1,2); const w=Math.max(20,Math.floor(rect.width*dpr)),h=Math.max(20,Math.floor(rect.height*dpr));
-  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
-  ctx.clearRect(0,0,w,h);
-  const model=getModel(); if(!model.parts.length)return;
-  const b=projectedBounds(model.parts,w,h), palette=colorForMaterial();
-  const sx=w/2-b.centerX*b.scale, sy=h/2+b.centerY*b.scale;
-  const project=q=>({x:sx+q.x*b.scale,y:sy-q.y*b.scale});
-  ctx.save();
-  // Ground shadow.
-  ctx.fillStyle='rgba(0,0,0,.08)';
-  ctx.beginPath();ctx.ellipse(w/2,h*0.84,Math.max(w*0.18,40)*state.view.zoom,Math.max(h*0.035,8)*state.view.zoom,0,0,Math.PI*2);ctx.fill();
+const FACE_DEFS=[
+  [0,1,2,3,"front"],[1,5,6,2,"right"],[4,0,3,7,"left"],
+  [3,2,6,7,"top"],[0,4,5,1,"bottom"],[4,5,6,7,"back"]
+];
+function palette(){
+  const f=family(),v=(rec()?.variant||selected.variant||"").toLowerCase();
+  if(v.includes("negro"))return ["#303030","#242424","#505050","#151515"];
+  if(v.includes("blanco"))return ["#e9e9e4","#c8c8c1","#f6f6f0","#777770"];
+  if(v.includes("roble")||v.includes("cedro")||v.includes("paraíso")||v.includes("guatambú")||v.includes("cerejeira")||f?.id==="pino"||f?.id==="eucaliptu")return ["#bb8b60","#936541","#d3a87d","#65472f"];
+  if(f?.id==="fenolico")return ["#725f50","#4e4036","#8d7764","#342b25"];
+  return ["#b9b7af","#98958d","#d4d0c7","#57564f"];
+}
+function roundedRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,r):(ctx.rect(x,y,w,h));}
+function draw3D(data){
+  if(!canvas)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2),rect=canvas.getBoundingClientRect();
+  canvas.width=Math.max(1,Math.floor(rect.width*dpr));canvas.height=Math.max(1,Math.floor(rect.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=rect.width,H=rect.height; ctx.clearRect(0,0,W,H);
+  // ground shadow
+  ctx.save();ctx.fillStyle="rgba(0,0,0,.08)";ctx.beginPath();ctx.ellipse(W/2+view.panX,H*.86+view.panY,Math.min(W*.26,270)*view.zoom,Math.min(H*.06,38)*view.zoom,0,0,Math.PI*2);ctx.fill();ctx.restore();
+
+  const all=data.parts.flatMap(p=>verts(p));
+  const raw=all.map(v=>project(v,1,0,0));
+  const minX=Math.min(...raw.map(p=>p.x)),maxX=Math.max(...raw.map(p=>p.x),1);
+  const minY=Math.min(...raw.map(p=>p.y)),maxY=Math.max(...raw.map(p=>p.y),1);
+  const baseScale=Math.min(W*.62/Math.max(maxX-minX,1),H*.66/Math.max(maxY-minY,1));
+  const scale=baseScale*view.zoom;
+  const center0=raw.map(p=>({x:p.x*scale,y:p.y*scale}));
+  const cx=W/2-(minX+maxX)/2*scale, cy=H/2-(minY+maxY)/2*scale;
+
+  const [front,side,top,edge]=palette();
   const faces=[];
-  for(const part of model.parts){for(const face of makeFaces(part)){const avgZ=face.poly.reduce((a,q)=>a+q.z,0)/face.poly.length;faces.push({...face,avgZ});}}
-  faces.sort((a,b)=>a.avgZ-b.avgZ);
-  const fill={front:palette.front,side:palette.side,top:palette.top,bottom:palette.side};
-  for(const face of faces){
-    const pts=face.poly.map(project); ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y); ctx.closePath();
-    ctx.fillStyle=fill[face.shade]||palette.base; ctx.fill(); ctx.strokeStyle='rgba(60,57,52,.48)';ctx.lineWidth=Math.max(0.8,dpr*0.8);ctx.stroke();
+  for(const part of data.parts){
+    const vv=verts(part);
+    for(const fd of FACE_DEFS){
+      const q=fd[0]===undefined?[]:fd.slice(0,4).map(i=>project(vv[i],scale,cx,cy));
+      const depth=q.reduce((a,b)=>a+b.depth,0)/q.length;
+      faces.push({q,depth,kind:fd[4],part});
+    }
   }
-  ctx.restore();
+  faces.sort((a,b)=>a.depth-b.depth);
+  const fills={front,back:side,right:side,left:side,top,bottom:side};
+  for(const face of faces){
+    ctx.beginPath();face.q.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();
+    ctx.fillStyle=fills[face.kind];ctx.fill();ctx.strokeStyle=edge;ctx.lineWidth=1;ctx.stroke();
+  }
+  // subtle piece labels for dividers/shelves
+  ctx.font="600 10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif";ctx.fillStyle="rgba(0,0,0,.42)";
+  for(const p of data.parts.filter(x=>x.type==="divider"||x.type==="shelf")){
+    const pv=project({x:p.x,y:p.y+p.h/2,z:p.d/2},scale,cx,cy);
+    // only very subtle, never obstructing
+    if(pv.x>0 && pv.x<W && pv.y>0 && pv.y<H){ /* intentionally no visible label */ }
+  }
 }
-function init3D(){
-  canvas=document.createElement('canvas');canvas.setAttribute('aria-label','Visor 3D axonométrico');
-  $('viewer')?.replaceChildren(canvas);
-  const container=$('viewer');
-  const resize=()=>render3D(); window.addEventListener('resize',resize); if('ResizeObserver' in globalThis)new ResizeObserver(resize).observe(container);
-  canvas.addEventListener('pointerdown',e=>{dragging=true;lastPointer={x:e.clientX,y:e.clientY};canvas.setPointerCapture?.(e.pointerId);});
-  canvas.addEventListener('pointermove',e=>{if(!dragging)return; const dx=e.clientX-lastPointer.x,dy=e.clientY-lastPointer.y; lastPointer={x:e.clientX,y:e.clientY}; state.view.yaw+=dx*0.008; state.view.pitch=Math.max(-0.9,Math.min(1.2,state.view.pitch+dy*0.008)); render3D();});
-  canvas.addEventListener('pointerup',e=>{dragging=false;canvas.releasePointerCapture?.(e.pointerId);});
-  canvas.addEventListener('pointercancel',()=>{dragging=false;});
-  canvas.addEventListener('wheel',e=>{e.preventDefault();state.view.zoom=Math.max(0.55,Math.min(2.4,state.view.zoom*Math.exp(-e.deltaY*0.001)));render3D();},{passive:false});
-  render3D();
-}
-function resetView(){state.view={yaw:-0.62,pitch:0.48,zoom:1};render3D();}
+function render3D(data){draw3D(data);}
 
-function renderMaterialsPage(){
-  const count=$('materialsCount'),body=$('materialsBody'),empty=$('emptyMaterials');
-  if(count)count.textContent=`${state.materials.length} ${state.materials.length===1?'material':'materiales'}`;
-  if(!body)return;
-  body.innerHTML=state.materials.map(m=>`<tr><td><strong>${esc(cat(m.materialId)?.label||m.name)}</strong></td><td>${m.variant?esc(m.variant):'<span class="muted">—</span>'}</td><td>${m.thickness} mm</td><td><div class="input-with-unit"><input class="catalog-inline material-price" data-id="${esc(m.id)}" type="number" min="0" step="100" value="${Number(m.price)}" aria-label="Precio por m²"><span>ARS</span></div></td><td><button type="button" class="danger-btn delete-material" data-id="${esc(m.id)}">Eliminar</button></td></tr>`).join('');
-  empty?.classList.toggle('hidden',state.materials.length>0);
-}
+canvas=$("viewerCanvas");ctx=canvas.getContext("2d");
+function resetView(){view={yaw:-0.72,pitch:0.42,zoom:1,panX:0,panY:0};updateAll();}
+$("resetView").addEventListener("click",resetView);
 
-function renderBaseMaterialForm(){
-  const material=$('materialCategory'),variant=$('materialVariant'),thick=$('materialThickness'); if(!material||!variant||!thick)return;
-  const selected=material.value; setOptions(material,CATALOG.map(m=>({label:m.label,value:m.id})),'Seleccionar material...',selected);
-  const m=cat(material.value);
-  if(!m){variant.replaceChildren(new Option('Sin variante',''));variant.disabled=true;variant.closest('label')?.classList.add('hidden');setOptions(thick,[],'Seleccioná un material primero...');thick.disabled=true;return;}
-  if(m.variants.length){setOptions(variant,m.variants.map(v=>({label:v,value:v})),'Seleccionar color...',variant.value);variant.disabled=false;variant.closest('label')?.classList.remove('hidden');}
-  else {variant.replaceChildren(new Option('Sin variante',''));variant.disabled=true;variant.closest('label')?.classList.add('hidden');}
-  if(m.thicknesses.length){setOptions(thick,m.thicknesses.map(mm=>({label:`${mm} mm`,value:String(mm)})),'Seleccionar grosor...',thick.value);thick.disabled=false;}
-  else {setOptions(thick,[],'Grosor pendiente de definir...');thick.disabled=true;}
-  const helper=$('thicknessHelper'); if(helper)helper.textContent=m.thicknesses.length?`Disponibles: ${m.thicknesses.join(', ')} mm.`:'Todavía no se definieron grosores para este material.';
-}
-
-function showPage(pageId,button){
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===pageId));
-  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active-page',p.id===pageId));
-  if(pageId==='calculatorPage'){setTimeout(()=>render3D(),0);}
-}
-window.showPage=showPage;
-
-function bind(){
-  document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page,btn)));
-  $('materialFamilySelect')?.addEventListener('change',()=>{state.selectedFamilyId=$('materialFamilySelect').value;state.selectedVariant='';state.selectedMaterialId='';renderCalcVariants();renderComponents();updateBudget();});
-  $('materialVariantSelect')?.addEventListener('change',()=>{state.selectedVariant=$('materialVariantSelect').value;state.selectedMaterialId='';renderCalcThicknesses();renderComponents();updateBudget();});
-  $('materialThicknessSelect')?.addEventListener('change',()=>{
-    const value=$('materialThicknessSelect').value;
-    state.selectedMaterialId=value.startsWith('missing:')?'':value;
-    updateSelectedMaterialUI();renderComponents();updateBudget();
-  });
-  inputIds.forEach(id=>els[id]?.addEventListener('input',()=>{renderComponents();updateBudget();}));
-  $('addDivider')?.addEventListener('click',()=>{const m=dims();state.dividers.push({id:uid(),position:Math.min(300,Math.max(m.innerW-m.T,0))});renderComponents();updateBudget();});
-  $('addShelf')?.addEventListener('click',()=>{state.shelves.push({id:uid(),section:0,height:300});renderComponents();updateBudget();});
-  $('resetView')?.addEventListener('click',resetView);
-  $('dividersList')?.addEventListener('input',e=>{const item=state.dividers.find(d=>d.id===e.target.dataset.id);if(item){item.position=Number(e.target.value)||0;renderComponents();updateBudget();}});
-  $('dividersList')?.addEventListener('click',e=>{if(!e.target.classList.contains('remove-divider'))return;state.dividers=state.dividers.filter(d=>d.id!==e.target.dataset.id);state.shelves=state.shelves.map(s=>({...s,section:Math.min(s.section,state.dividers.length)}));renderComponents();updateBudget();});
-  $('shelvesList')?.addEventListener('input',e=>{const item=state.shelves.find(s=>s.id===e.target.dataset.id);if(item){item.height=Number(e.target.value)||0;renderComponents();updateBudget();}});
-  $('shelvesList')?.addEventListener('change',e=>{const item=state.shelves.find(s=>s.id===e.target.dataset.id);if(item){item.section=Number(e.target.value)||0;renderComponents();updateBudget();}});
-  $('shelvesList')?.addEventListener('click',e=>{if(!e.target.classList.contains('remove-shelf'))return;state.shelves=state.shelves.filter(s=>s.id!==e.target.dataset.id);renderComponents();updateBudget();});
-  $('materialCategory')?.addEventListener('change',renderBaseMaterialForm);
-  $('materialVariant')?.addEventListener('change',renderBaseMaterialForm);
-  $('materialForm')?.addEventListener('submit',e=>{
-    e.preventDefault();
-    const materialId=$('materialCategory').value, material=cat(materialId), variant=material?.variants.length?$('materialVariant').value:'', thickness=Number($('materialThickness').value), price=Number($('materialPrice').value);
-    if(!material){alert('Seleccioná un material.');return;}
-    if(material.variants.length&&!material.variants.includes(variant)){alert('Seleccioná un color / variante.');return;}
-    if(!material.thicknesses.includes(thickness)){alert('Seleccioná un grosor disponible.');return;}
-    if(!Number.isFinite(price)||price<0){alert('Ingresá un precio válido por m².');return;}
-    const existing=state.materials.find(m=>m.materialId===materialId&&(m.variant||'')===variant&&Number(m.thickness)===thickness);
-    if(existing)existing.price=price;
-    else state.materials.push({id:uid(),materialId,variant,name:canonicalName({materialId,variant}),thickness,price});
-    state.materials=dedupe(state.materials);saveMaterials();renderMaterialsPage();renderCalculatorMaterials();renderBaseMaterialForm();renderCalcThicknesses();updateBudget();
-    $('materialPrice').value='';
-  });
-  $('materialsBody')?.addEventListener('input',e=>{const i=e.target.closest('.material-price');if(!i)return;const m=state.materials.find(x=>x.id===i.dataset.id);const p=Number(i.value);if(m&&Number.isFinite(p)&&p>=0){m.price=p;saveMaterials();renderCalculatorMaterials();updateBudget();}});
-  $('materialsBody')?.addEventListener('click',e=>{const b=e.target.closest('.delete-material');if(!b)return;state.materials=state.materials.filter(m=>m.id!==b.dataset.id);saveMaterials();renderMaterialsPage();renderCalculatorMaterials();renderCalcThicknesses();updateBudget();});
-  $('minimumPieceCost')?.addEventListener('input',()=>{state.minimumPieceCost=Math.max(Number($('minimumPieceCost').value)||0,0);saveSettings();updateBudget();});
-  $('roundingUnit')?.addEventListener('input',()=>{state.roundingUnit=Math.max(Number($('roundingUnit').value)||1,1);saveSettings();updateBudget();});
-  window.addEventListener('materialsUpdated',()=>{state.materials=loadMaterials();renderMaterialsPage();renderCalculatorMaterials();updateBudget();});
-}
+canvas.addEventListener("pointerdown",e=>{
+  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  canvas.setPointerCapture?.(e.pointerId);
+  if(activePointers.size===1){
+    drag=true;dragMode=e.shiftKey?"pan":"rotate";last={x:e.clientX,y:e.clientY};canvas.classList.add("dragging");
+  }else if(activePointers.size===2){
+    const pts=[...activePointers.values()],dx=pts[0].x-pts[1].x,dy=pts[0].y-pts[1].y;pinchDistance=Math.hypot(dx,dy);
+  }
+});
+canvas.addEventListener("pointermove",e=>{
+  if(!activePointers.has(e.pointerId))return;activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(activePointers.size===2){
+    const pts=[...activePointers.values()],dx=pts[0].x-pts[1].x,dy=pts[0].y-pts[1].y,d=Math.hypot(dx,dy);
+    if(pinchDistance){view.zoom=clamp(view.zoom*(d/pinchDistance),.45,3.4);updateAll();}
+    pinchDistance=d;return;
+  }
+  if(!drag)return;
+  const dx=e.clientX-last.x,dy=e.clientY-last.y;last={x:e.clientX,y:e.clientY};
+  if(dragMode==="pan"){view.panX+=dx;view.panY+=dy;}
+  else{view.yaw+=dx*.008;view.pitch=clamp(view.pitch+dy*.008,-1.35,1.35);}
+  updateAll();
+});
+function endPointer(e){activePointers.delete(e.pointerId);if(activePointers.size<2)pinchDistance=0;if(activePointers.size===0){drag=false;canvas.classList.remove("dragging");}}
+canvas.addEventListener("pointerup",endPointer);canvas.addEventListener("pointercancel",endPointer);
+canvas.addEventListener("wheel",e=>{e.preventDefault();view.zoom=clamp(view.zoom*Math.exp(-e.deltaY*.001),.45,3.4);updateAll();},{passive:false});
+window.addEventListener("resize",()=>updateAll());
 
 function init(){
-  renderMaterialsPage();
-  renderBaseMaterialForm();
-  renderCalculatorMaterials();
-  const min=$('minimumPieceCost'),unit=$('roundingUnit'); if(min)min.value=state.minimumPieceCost;if(unit)unit.value=state.roundingUnit;
-  init3D(); bind(); renderComponents(); updateBudget();
+  // If the user already had records, preserve them. Otherwise MDF 15 is supplied by readMaterials().
+  initMaterialSelectors();renderVariant();renderThickness();renderComponents();
+  updateAll();
 }
-
-document.addEventListener('DOMContentLoaded',init);
+init();
+})();

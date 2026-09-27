@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#171717">
+<title>Base de materiales · Presupuestador</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+<nav class="top-nav">
+  <a class="nav-btn" href="./index.html">1 · Cálculo de mueble</a>
+  <a class="nav-btn active" href="./materiales.html">2 · Base de materiales</a>
+</nav>
+<main class="app-shell">
+<section class="page">
+  <div class="page-intro">
+    <div><div class="page-kicker">CATÁLOGO</div><h2>Base de materiales</h2><p>Seleccioná material, variante y grosor; sólo escribí el precio por m².</p></div>
+    <div class="status-pill" id="materialsCount">0 materiales</div>
+  </div>
+
+  <div class="materials-layout">
+    <section class="panel material-form-panel">
+      <div class="panel-title"><div><span class="step">01</span><h3>Cargar / actualizar precio</h3></div></div>
+      <form id="materialForm">
+        <label>Material<select id="baseMaterial" required></select></label>
+        <label id="baseVariantWrap" class="hidden">Color / variante<select id="baseVariant"></select></label>
+        <label>Grosor<select id="baseThickness" required></select></label>
+        <div id="baseAvailability" class="catalog-availability">Los grosores se filtran según el material.</div>
+        <label>Precio por m²<div class="input-with-unit"><input id="basePrice" type="number" min="0" step="100" placeholder="48000" required><span>ARS</span></div></label>
+        <button class="primary-btn" type="submit">Guardar / actualizar</button>
+      </form>
+      <p class="helper form-helper">La combinación material + variante + grosor identifica un precio. Si ya existe, se actualiza.</p>
+    </section>
+
+    <section class="panel material-table-panel">
+      <div class="panel-title"><div><span class="step">02</span><h3>Materiales cargados</h3></div></div>
+      <div class="table-wrap material-table"><table><thead><tr><th>Material</th><th>Color / variante</th><th>Grosor</th><th>Precio / m²</th><th></th></tr></thead><tbody id="materialsBody"></tbody></table></div>
+      <div id="emptyMaterials" class="empty-state hidden">Todavía no hay materiales cargados.</div>
+    </section>
+  </div>
+
+  <section class="panel budget-panel">
+    <div class="panel-title"><div><span class="step">03</span><h3>Reglas de compra a medida</h3></div></div>
+    <div class="grid-two">
+      <label>Costo mínimo por pieza<div class="input-with-unit"><input id="minimumPieceCost" type="number" min="0" step="100"><span>ARS</span></div></label>
+      <label>Redondeo hacia arriba<div class="input-with-unit"><input id="roundingUnit" type="number" min="1" step="100"><span>ARS</span></div></label>
+    </div>
+    <p class="helper">Ejemplo: $2.500 → $4.000 · $4.000 → $4.000 · $11.350 → $12.000.</p>
+  </section>
+</section>
+</main>
+<footer class="footer-note">V1.6 · Los precios y materiales se guardan localmente en este navegador.</footer>
+<script src="catalog.js"></script>
+<script src="materials.js"></script>
+</body></html>
