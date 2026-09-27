@@ -4,3 +4,5 @@
 .material-table td:nth-child(1){min-width:260px}
 .material-table td:nth-child(2){min-width:95px}
 .material-table td:nth-child(3){min-width:160px}
+
+.material-form .hidden{display:none!important}.material-form label{min-width:0}.material-table td:nth-child(1){min-width:330px}
