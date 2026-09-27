@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171717" />
   <link rel="manifest" href="manifest.json" />
+  <title>Presupuestador de Muebles · V0.5</title>
   <link rel="stylesheet" href="styles.css" />
-  <title>Presupuestador de Muebles</title>
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+        "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
       }
     }
   </script>
@@ -19,11 +19,11 @@
 <body>
   <header class="app-header">
     <div class="brand-block">
-      <div class="eyebrow">HERRAMIENTA DE TALLER</div>
+      <div class="eyebrow">CARPINTERÍA · PRESUPUESTOS</div>
       <h1>Presupuestador de Muebles</h1>
-      <p>Configuración de muebles, despiece y costos de materiales.</p>
+      <p>Configurá el mueble, calculá materiales y revisá la geometría.</p>
     </div>
-    <div class="version-badge">V0.4 · PROTOTIPO</div>
+    <div class="version-badge">V0.5 · REGLAS DE CORTE</div>
   </header>
 
   <nav class="top-nav" aria-label="Navegación principal">
@@ -32,168 +32,149 @@
   </nav>
 
   <main class="app-shell">
-    <!-- PÁGINA: CÁLCULO -->
     <section id="calculatorPage" class="page active-page">
       <div class="page-intro">
         <div>
-          <span class="page-kicker">CONFIGURADOR</span>
+          <div class="page-kicker">CONFIGURADOR</div>
           <h2>Cálculo de mueble</h2>
-          <p>Primero elegí el material. Sus espesores y precio por m² salen de la Base de materiales.</p>
+          <p>El mueble se construye desde sus piezas. Las divisiones y estantes tienen posiciones independientes.</p>
         </div>
         <div class="status-pill" id="materialStatus">Material no seleccionado</div>
       </div>
 
       <div class="calculator-layout">
-        <section class="panel controls-panel">
+        <aside class="panel controls-panel">
           <div class="panel-title">
             <div><span class="step">01</span><h3>Material</h3></div>
           </div>
           <label>Material / grosor
             <select id="materialSelect"></select>
           </label>
-          <div class="selected-material-card" id="selectedMaterialCard">
+          <div class="selected-material-card">
             <div><span>Grosor</span><strong id="selectedThickness">—</strong></div>
             <div><span>Precio</span><strong id="selectedPrice">—</strong></div>
           </div>
 
           <div class="panel-title section-gap">
             <div><span class="step">02</span><h3>Medidas exteriores</h3></div>
-            <span class="unit">mm</span>
           </div>
           <div class="grid-two">
-            <label>Ancho
-              <input id="width" type="number" value="670" min="1" step="1" />
-            </label>
-            <label>Alto
-              <input id="height" type="number" value="860" min="1" step="1" />
-            </label>
-            <label>Profundidad
-              <input id="depth" type="number" value="430" min="1" step="1" />
-            </label>
-            <label>Desperdicio
-              <input id="waste" type="number" value="0" min="0" step="0.5" />
-            </label>
+            <label>Ancho<input id="width" type="number" min="1" step="1" value="670"><span class="unit">mm</span></label>
+            <label>Alto<input id="height" type="number" min="1" step="1" value="860"><span class="unit">mm</span></label>
+            <label>Profundidad<input id="depth" type="number" min="1" step="1" value="430"><span class="unit">mm</span></label>
+            <label>Desperdicio<input id="waste" type="number" min="0" step="0.5" value="0"><span class="unit">%</span></label>
           </div>
 
           <div class="panel-title section-gap">
-            <div><span class="step">03</span><h3>Distribución interior</h3></div>
+            <div><span class="step">03</span><h3>Divisiones verticales</h3></div>
+            <button id="addDivider" class="secondary-btn">+ División</button>
           </div>
-          <div class="grid-two">
-            <label>División desde interior izquierdo
-              <input id="dividerOffset" type="number" value="470" min="0" step="1" />
-            </label>
-            <label>Estante izquierdo desde la base
-              <input id="leftShelfHeight" type="number" value="350" min="0" step="1" />
-            </label>
-            <label>Estantes derechos
-              <input id="rightShelves" type="number" value="2" min="0" max="10" step="1" />
-            </label>
+          <div id="dividersList" class="component-list"></div>
+          <p class="helper">La posición se mide desde la <strong>cara interior izquierda</strong> hasta la cara izquierda de cada división.</p>
+
+          <div class="panel-title section-gap">
+            <div><span class="step">04</span><h3>Estantes horizontales</h3></div>
+            <button id="addShelf" class="secondary-btn">+ Estante</button>
           </div>
+          <div id="shelvesList" class="component-list"></div>
+          <p class="helper">La altura se mide desde la <strong>cara superior de la base</strong>. Cada estante ocupa el módulo elegido.</p>
 
           <div class="rule-card">
-            <strong>Regla actual de compra</strong>
-            <p>El proveedor corta las piezas a medida, por lo que el costo del tablero se calcula sobre los m² de las piezas, no sobre una placa completa.</p>
+            <strong>Regla del proveedor</strong>
+            <p>Material cortado por pieza: mínimo <b>$4.000</b> y redondeo hacia arriba a <b>$1.000</b>. Podremos convertir estos valores en parámetros configurables.</p>
           </div>
-
-          <div id="warning" class="warning hidden"></div>
-        </section>
+          <div id="modelWarning" class="warning hidden"></div>
+        </aside>
 
         <section class="panel viewer-panel">
           <div class="viewer-head">
             <div>
-              <span class="page-kicker">VISTA DE DISEÑO</span>
+              <div class="page-kicker">PREVISUALIZACIÓN</div>
               <h3>Modelo 3D axonométrico</h3>
-              <p>Espesores construidos a escala real. Arrastrá para orbitar y usá la rueda para acercar/alejar.</p>
+              <p>Arrastrá para rotar · rueda/pinch para zoom · espesor proporcional.</p>
             </div>
             <button id="resetView" class="secondary-btn">Restablecer vista</button>
           </div>
-          <div class="viewer-wrap" id="viewerWrap">
-            <div id="viewer" aria-label="Previsualización 3D del mueble"></div>
-            <div class="viewer-overlay top-left">
-              <span>AXONOMÉTRICA</span>
-              <b id="viewerSize">670 × 860 × 430 mm</b>
-            </div>
-            <div class="viewer-overlay bottom-right" id="viewerHint">MDF · 15 mm</div>
+          <div class="viewer-wrap">
+            <div id="viewer"></div>
+            <div class="viewer-overlay top-left"><span>MATERIAL</span><b id="viewerMaterial">Sin material</b></div>
+            <div class="viewer-overlay bottom-right"><span>MEDIDAS</span><b id="viewerDimensions">670 × 860 × 430 mm</b></div>
           </div>
-          <div class="dimension-cards" id="dimensions"></div>
+          <div class="dimension-cards">
+            <div class="dimension-card"><span>Ancho interior</span><strong id="innerWidth">—</strong></div>
+            <div class="dimension-card"><span>Alto interior</span><strong id="innerHeight">—</strong></div>
+            <div class="dimension-card"><span>Divisiones</span><strong id="dividerCount">0</strong></div>
+            <div class="dimension-card"><span>Estantes</span><strong id="shelfCount">0</strong></div>
+          </div>
         </section>
       </div>
 
       <section class="panel budget-panel">
         <div class="panel-title spread">
-          <div><span class="step">04</span><h3>Despiece y costo del material</h3></div>
-          <span class="muted">Precios tomados automáticamente de la Base de materiales.</span>
+          <div><span class="step">05</span><h3>Despiece y costo de material cortado</h3></div>
+          <div class="muted" id="priceM2Label">—</div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr><th>Pieza</th><th>Cant.</th><th>Medida</th><th>m²</th></tr>
-            </thead>
+            <thead><tr><th>Pieza</th><th>Cant.</th><th>Medida</th><th>Área total</th><th>Costo calculado</th></tr></thead>
             <tbody id="partsBody"></tbody>
           </table>
         </div>
         <div class="budget-summary">
-          <div class="summary-card"><span>Superficie de piezas</span><strong id="areaM2">—</strong></div>
-          <div class="summary-card"><span>Superficie con desperdicio</span><strong id="areaWaste">—</strong></div>
-          <div class="summary-card"><span>Precio del material</span><strong id="priceM2Label">—</strong></div>
-          <div class="summary-card total"><span>Costo de material</span><strong id="materialCost">—</strong></div>
+          <div class="summary-card"><span>Área neta</span><strong id="areaM2">—</strong></div>
+          <div class="summary-card"><span>Área + desperdicio</span><strong id="areaWaste">—</strong></div>
+          <div class="summary-card"><span>Costo material cortado</span><strong id="materialCost">—</strong></div>
+          <div class="summary-card total"><span>Total actual</span><strong id="totalCost">—</strong></div>
         </div>
-        <div class="budget-note" id="budgetNote"></div>
+        <div class="budget-note" id="budgetNote">Seleccioná un material para activar el cálculo.</div>
       </section>
     </section>
 
-    <!-- PÁGINA: BASE DE MATERIALES -->
     <section id="materialsPage" class="page">
       <div class="page-intro">
         <div>
-          <span class="page-kicker">CATÁLOGO</span>
+          <div class="page-kicker">CATÁLOGO</div>
           <h2>Base de materiales</h2>
-          <p>Cargá los materiales, espesores y valores que utilizás. La información queda disponible para el cálculo del mueble.</p>
+          <p>Cargá cada material con su grosor y precio actual por m². El cálculo de mueble utiliza este catálogo.</p>
         </div>
+        <div class="status-pill" id="materialsCount">0 materiales</div>
       </div>
 
       <div class="materials-layout">
         <section class="panel material-form-panel">
-          <div class="panel-title">
-            <div><span class="step">01</span><h3>Agregar material</h3></div>
-          </div>
-          <div class="material-form">
-            <label>Material
-              <input id="materialName" type="text" placeholder="Ej.: MDF, Melamina, fenólico" />
-            </label>
-            <label>Grosor
-              <div class="input-with-unit"><input id="materialThickness" type="number" min="1" step="1" placeholder="15" /><span>mm</span></div>
-            </label>
-            <label>Valor por m²
-              <div class="input-with-unit"><input id="materialPrice" type="number" min="0" step="100" placeholder="48000" /><span>ARS</span></div>
-            </label>
-            <button id="addMaterial" class="primary-btn">Agregar a la base</button>
-          </div>
-          <div class="rule-card">
-            <strong>Ejemplo cargado</strong>
-            <p><b>MDF · 15 mm · $48.000/m²</b>. Podés modificarlo en la tabla o eliminarlo.</p>
-          </div>
+          <div class="panel-title"><div><span class="step">01</span><h3>Agregar material</h3></div></div>
+          <form id="materialForm" class="material-form">
+            <label>Material<input id="materialName" type="text" placeholder="Ej. MDF" required></label>
+            <label>Grosor<div class="input-with-unit"><input id="materialThickness" type="number" min="1" step="1" placeholder="15" required><span>mm</span></div></label>
+            <label>Valor por m²<div class="input-with-unit"><input id="materialPrice" type="number" min="0" step="100" placeholder="48000" required><span>ARS</span></div></label>
+            <button class="primary-btn" type="submit">Agregar material</button>
+          </form>
         </section>
 
         <section class="panel material-table-panel">
-          <div class="panel-title spread">
-            <div><span class="step">02</span><h3>Materiales registrados</h3></div>
-            <span class="muted" id="materialsCount">0 materiales</span>
-          </div>
-          <div class="table-wrap">
-            <table class="materials-table">
-              <thead><tr><th>Material</th><th>Grosor</th><th>Valor / m²</th><th>Acción</th></tr></thead>
+          <div class="panel-title"><div><span class="step">02</span><h3>Materiales cargados</h3></div></div>
+          <div class="table-wrap material-table">
+            <table>
+              <thead><tr><th>Material</th><th>Grosor</th><th>Precio / m²</th><th></th></tr></thead>
               <tbody id="materialsBody"></tbody>
             </table>
           </div>
           <div id="emptyMaterials" class="empty-state hidden">Todavía no hay materiales cargados.</div>
         </section>
       </div>
+
+      <section class="panel budget-panel">
+        <div class="panel-title"><div><span class="step">03</span><h3>Reglas de compra a medida</h3></div></div>
+        <div class="grid-two settings-grid">
+          <label>Costo mínimo por pieza<div class="input-with-unit"><input id="minimumPieceCost" type="number" min="0" step="100" value="4000"><span>ARS</span></div></label>
+          <label>Redondeo hacia arriba<div class="input-with-unit"><input id="roundingUnit" type="number" min="1" step="100" value="1000"><span>ARS</span></div></label>
+        </div>
+        <p class="helper">Estas reglas se aplican a cada pieza de despiece: por ejemplo, $11.350 → $12.000. Se guardan en este navegador.</p>
+      </section>
     </section>
   </main>
 
-  <footer class="footer-note">Presupuestador de Muebles · Prototipo de trabajo · Datos guardados localmente en este navegador.</footer>
-
+  <footer class="footer-note">V0.5 · Prototipo de presupuestación · Los datos se guardan localmente en este dispositivo.</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

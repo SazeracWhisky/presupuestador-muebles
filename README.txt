@@ -1,26 +1,16 @@
-PRESUPUESTADOR DE MUEBLES — V0.4
+PRESUPUESTADOR DE MUEBLES · V0.5
 
-Esta versión organiza la aplicación en dos secciones superiores:
-1. Cálculo de mueble
-2. Base de materiales
+Novedades:
+- Menú superior con Cálculo de mueble y Base de materiales.
+- Materiales editables por nombre + grosor + valor/m².
+- Divisiones verticales con posición individual.
+- Estantes horizontales con módulo y altura individual.
+- Regla de compra a medida configurable: mínimo por pieza y redondeo hacia arriba.
+- Despiece y costo por pieza.
+- Visor 3D proporcional con espesor real.
 
-Cambios principales:
-- Base de materiales separada del cálculo.
-- Cada material guarda nombre, grosor y precio por m².
-- El cálculo empieza seleccionando un material del catálogo.
-- El grosor del mueble se toma automáticamente del material elegido.
-- Despiece y costo de tablero se calculan por m² de piezas cortadas a medida.
-- Previsualización 3D construida con geometría real: el espesor es proporcional al resto de las dimensiones.
-- Vista inicial axonométrica con órbita, zoom y botón para restablecer.
-- Sin fondo trasero, respetando el mueble de prueba.
-- Materiales guardados en localStorage por ahora.
+REGLA ACTUAL DE COSTO POR PIEZA
+Costo bruto de una pieza = área de la pieza × precio/m².
+Costo cobrado = techo(max(costo bruto, mínimo) / unidad de redondeo) × unidad.
 
-IMPORTANTE — VISOR 3D
-Three.js se carga desde jsDelivr. Para usar el visor 3D, el navegador necesita conexión a Internet cuando abre la aplicación. La guía oficial de Three.js admite importar la librería desde CDN mediante import maps.
-
-PARA PROBAR LOCALMENTE
-1. Abrí una terminal en esta carpeta.
-2. Ejecutá: python3 -m http.server 8000
-3. Abrí: http://localhost:8000
-
-También se puede desplegar como sitio estático en un servicio de hosting.
+Ejemplo: $11.350 → $12.000. Un cálculo de $2.500 → $4.000 si el mínimo es $4.000 y el redondeo es $1.000.
