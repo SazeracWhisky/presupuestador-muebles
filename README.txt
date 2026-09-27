@@ -1,4 +1,5 @@
-V2.2
-Ajuste de densidad y legibilidad de la columna de configuración.
-Controles de estantes rediseñados para mostrar claramente altura y módulo en pantallas estrechas.
-No modifica el motor de despiece ni el visor 3D.
+V2.3
+Reorganización de la columna izquierda para legibilidad y densidad.
+La columna de configuración es desplazable de forma independiente en escritorio.
+Los estantes tienen una fila compacta con altura, módulo y eliminar visibles.
+La visualización 3D y el despiece no cambian en esta versión.
