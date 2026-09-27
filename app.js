@@ -267,6 +267,7 @@ function resetView(){ fitCameraToModel(); controls.reset(); }
 function bind(){
   document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active-page'));btn.classList.add('active');$(btn.dataset.page).classList.add('active-page'); if(btn.dataset.page==='calculatorPage'){resizeViewer();buildModel();}}));
   $('materialSelect').addEventListener('change',()=>{state.selectedMaterialId=$('materialSelect').value; updateSelectedMaterialUI(); renderComponents(); updateBudget();});
+  window.addEventListener('materialsUpdated',()=>{state.materials=loadMaterials(); renderMaterialCatalog(); updateBudget();});
   inputIds.forEach(id=>els[id].addEventListener('input',()=>{renderComponents();updateBudget();}));
   $('addDivider').addEventListener('click',()=>{const model=dims();state.dividers.push({id:cryptoId(),position:Math.min(300,Math.max(model.innerW-model.T,0))});renderComponents();updateBudget();});
   $('addShelf').addEventListener('click',()=>{state.shelves.push({id:cryptoId(),section:0,height:300});renderComponents();updateBudget();});
@@ -276,38 +277,6 @@ function bind(){
   $('shelvesList').addEventListener('input',e=>{const id=e.target.dataset.id;if(!id)return; const item=state.shelves.find(s=>s.id===id);if(item){item.height=Number(e.target.value)||0;updateBudget();}});
   $('shelvesList').addEventListener('change',e=>{const id=e.target.dataset.id;if(!id)return; const item=state.shelves.find(s=>s.id===id);if(item){item.section=Number(e.target.value)||0;updateBudget();renderComponents();}});
   $('shelvesList').addEventListener('click',e=>{if(!e.target.classList.contains('remove-shelf'))return;state.shelves=state.shelves.filter(s=>s.id!==e.target.dataset.id);renderComponents();updateBudget();});
-  $('materialForm').addEventListener('submit',e=>{
-    e.preventDefault();
-    const name=$('materialName').value;
-    const thickness=Number($('materialThickness').value);
-    const price=Number($('materialPrice').value);
-    if(!name || !THICKNESS_OPTIONS.includes(thickness) || price<0 || !Number.isFinite(price)) return;
-    const existing=state.materials.find(m=>m.name===name && Number(m.thickness)===thickness);
-    if(existing){
-      existing.price=price;
-      state.selectedMaterialId=existing.id;
-    } else {
-      const item={id:cryptoId(),name,thickness,price};
-      state.materials.push(item);
-      state.selectedMaterialId=item.id;
-    }
-    saveMaterials();
-    $('materialPrice').value='';
-    renderMaterialCatalog();
-    updateBudget();
-  });
-  $('materialsBody').addEventListener('input',e=>{
-    const id=e.target.dataset.id;
-    const m=state.materials.find(x=>x.id===id);
-    if(!m || !e.target.classList.contains('material-price')) return;
-    const next=Number(e.target.value);
-    if(Number.isFinite(next) && next>=0){
-      m.price=next;
-      saveMaterials();
-      if(state.selectedMaterialId===id) updateBudget();
-    }
-  });
-  $('materialsBody').addEventListener('click',e=>{if(!e.target.classList.contains('delete-material'))return;const id=e.target.dataset.id;state.materials=state.materials.filter(m=>m.id!==id);if(state.selectedMaterialId===id)state.selectedMaterialId=state.materials[0]?.id||'';saveMaterials();renderMaterialCatalog();updateBudget();});
   $('minimumPieceCost').addEventListener('input',()=>{state.minimumPieceCost=Math.max(Number($('minimumPieceCost').value)||0,0);saveSettings();updateBudget();});
   $('roundingUnit').addEventListener('input',()=>{state.roundingUnit=Math.max(Number($('roundingUnit').value)||1,1);saveSettings();updateBudget();});
 }
