@@ -75,12 +75,6 @@
       <div class="panel-title section-gap"><div><span class="step">05</span><h3>Estantes horizontales</h3></div><button id="addShelf" class="secondary-btn" type="button">+ Estante</button></div>
       <div id="shelvesList" class="component-list"></div>
       <p class="helper">La altura se mide desde la cara superior de la base. Cada estante ocupa el módulo elegido.</p>
-
-      
-      <div class="panel-title section-gap"><div><span class="step">06</span><h3>Cajones</h3></div><button id="addDrawer" class="secondary-btn" type="button">+ Cajón</button></div>
-      <div id="drawersList" class="component-list"></div>
-      <p class="helper">Un cajón ocupa un espacio libre entre horizontales dentro de un módulo. Las paredes de la caja deben medir al menos <strong>80 mm</strong> de alto.</p>
-
 <div class="rule-card"><strong>Regla del proveedor</strong><p>Material cortado por pieza: mínimo <b id="ruleMin">$4.000</b> y redondeo hacia arriba a <b id="ruleRound">$1.000</b>.</p></div>
       <div id="modelWarning" class="warning hidden"></div>
     </aside>
@@ -105,6 +99,15 @@
     </section>
   </div>
 
+  <section class="panel drawers-panel">
+    <div class="panel-title spread">
+      <div><span class="step">06</span><h3>Cajones</h3></div>
+      <button id="addDrawer" class="secondary-btn" type="button">+ Cajón</button>
+    </div>
+    <p class="drawer-intro">Cada cajón ocupa un espacio libre entre horizontales dentro de un módulo. La caja tiene una altura mínima de 80 mm; el ancho se calcula según la guía. Podés apilar varios cajones en el mismo espacio.</p>
+    <div id="drawersList" class="drawer-list-wide"></div>
+  </section>
+
   <section class="panel budget-panel">
     <div class="panel-title spread"><div><span class="step">07</span><h3>Despiece y costo de material cortado</h3></div><div class="muted" id="priceM2Label">—</div></div>
     <div class="table-wrap"><table><thead><tr><th>Pieza</th><th>Cant.</th><th>Medida</th><th>Área total</th><th>Costo</th></tr></thead><tbody id="partsBody"></tbody></table></div>
@@ -118,7 +121,7 @@
   </section>
 </section>
 </main>
-<footer class="footer-note">V2.5 · Cajones y frentes de cajón · Los precios y materiales se guardan localmente en este navegador.</footer>
+<footer class="footer-note">V2.6 · Cajones a ancho completo · Los precios y materiales se guardan localmente en este navegador.</footer>
 <script src="catalog.js"></script>
-<script src="app.js?v=2.5dc"></script>
+<script src="app.js?v=2.6"></script>
 </body></html>

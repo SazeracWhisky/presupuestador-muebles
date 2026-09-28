@@ -1,2 +1,3 @@
-V2.5
-Cajones apilables, altura editable, frente correctamente orientado, modo dentro/delante y dimensiones de frente editables con medida automática recuperable.
+V2.6
+La sección de cajones ocupa el ancho completo entre el configurador y el despiece/costo.
+Los cajones mantienen sus cálculos, apilado, guías, frente y dimensiones.
