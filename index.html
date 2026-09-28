@@ -55,7 +55,17 @@
           </select>
         </label>
       </div>
-      <p class="helper">Estas opciones determinan automáticamente el ancho de base/tapa y la altura de los laterales. El espesor seleccionado se descuenta donde corresponda.</p>
+
+      <div class="top-panel-dimensions">
+        <label>Ancho de tapa
+          <div class="input-with-unit"><input id="roofWidth" type="number" min="1" step="1" value="652"><span>mm</span></div>
+        </label>
+        <label>Profundidad de tapa
+          <div class="input-with-unit"><input id="roofDepth" type="number" min="1" step="1" value="430"><span>mm</span></div>
+        </label>
+        <button id="roofAutoSize" class="secondary-btn auto-size-btn" type="button">Usar medida automática</button>
+      </div>
+      <p class="helper">La posición define cómo se apoya la tapa. Su ancho y profundidad se pueden ajustar manualmente; el botón devuelve la medida automática según la posición.</p>
       <div class="construction-summary" id="constructionSummary"></div>
 
       <div class="panel-title section-gap"><div><span class="step">04</span><h3>Divisiones verticales</h3></div><button id="addDivider" class="secondary-btn" type="button">+ División</button></div>
@@ -108,7 +118,7 @@
   </section>
 </section>
 </main>
-<footer class="footer-note">V2.4 · Cajones y accesorios · Los precios y materiales se guardan localmente en este navegador.</footer>
+<footer class="footer-note">V2.5 · Cajones y frentes de cajón · Los precios y materiales se guardan localmente en este navegador.</footer>
 <script src="catalog.js"></script>
-<script src="app.js?v=2.4"></script>
+<script src="app.js?v=2.5dc"></script>
 </body></html>

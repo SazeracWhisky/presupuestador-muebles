@@ -15,8 +15,11 @@ let shelves = [
 ];
 let basePlacement = "inside";
 let roofPlacement = "inside";
+let roofWidth = null;
+let roofDepth = null;
 let drawers = [];
 const DRAWER_MIN_WALL = 80;
+// Drawer fronts use automatic sizing by default; explicit overrides are supported.
 const DRAWER_GUIDE_CLEARANCE = {z:25, telescopica:26};
 const ACCESSORIES_KEY = "presupuestador_accesorios_v1";
 
@@ -191,18 +194,23 @@ function getDrawerSpaces(data){
   for(const sec of ss){
     const shelfSupports=(data.shelfMap||[]).filter(s=>s.section===sec.index).sort((x,y)=>x.height-y.height);
     let previousTop=0, zone=1;
+
     for(const sh of shelfSupports){
       const clearH=Math.max(0,sh.height-previousTop);
       spaces.push({
-        id:`${sec.index}-${zone}`,section:sec.index,zone,
+        id:`${sec.index}-${zone}`,
+        section:sec.index,zone,
         label:`Módulo ${sec.index+1} · Espacio ${zone} · ${Math.round(clearH)} mm`,
         width:sec.width,height:clearH,bottom:previousTop,top:sh.height
       });
-      previousTop=sh.height+m.T; zone++;
+      previousTop=sh.height+m.T;
+      zone++;
     }
+
     const clearTop=Math.max(0,innerH-previousTop);
     spaces.push({
-      id:`${sec.index}-${zone}`,section:sec.index,zone,
+      id:`${sec.index}-${zone}`,
+      section:sec.index,zone,
       label:`Módulo ${sec.index+1} · Espacio ${zone} · ${Math.round(clearTop)} mm`,
       width:sec.width,height:clearTop,bottom:previousTop,top:innerH
     });
@@ -210,11 +218,28 @@ function getDrawerSpaces(data){
   return spaces;
 }
 
+function getStackedDrawerLayout(drawersList, space){
+  const items=drawersList.filter(d=>d.spaceId===space.id);
+  const layout=[];
+  let cursor=0; // from bottom of the available space upward
+
+  for(const d of items){
+    const requested=Math.max(DRAWER_MIN_WALL, Number(d.boxHeight)||DRAWER_MIN_WALL);
+    layout.push({...d, allocatedBottom:cursor, allocatedHeight:requested});
+    cursor+=requested;
+  }
+  return {items:layout,totalHeight:cursor,remaining:space.height-cursor};
+}
+
 function getParts(){
   const m=dims(),ss=sections(m),p=[];
   const innerW=Math.max(m.W-2*m.T,0),innerH=Math.max(m.H-2*m.T,0);
+
   const baseWidth=basePlacement==="inside"?innerW:m.W;
-  const roofWidth=roofPlacement==="inside"?innerW:m.W;
+  const roofAutoWidth=roofPlacement==="inside"?innerW:m.W;
+  const roofW=Math.max(1,Number.isFinite(Number(roofWidth))?Number(roofWidth):roofAutoWidth);
+  const roofD=Math.max(1,Number.isFinite(Number(roofDepth))?Number(roofDepth):m.D);
+
   const bottomInset=basePlacement==="outside"?m.T:0;
   const topInset=roofPlacement==="outside"?m.T:0;
   const verticalHeight=Math.max(m.H-bottomInset-topInset,0);
@@ -225,8 +250,14 @@ function getParts(){
 
   const baseY=basePlacement==="inside"?-m.H/2+bottomInset+m.T/2:-m.H/2+m.T/2;
   const roofY=roofPlacement==="inside"?m.H/2-topInset-m.T/2:m.H/2-m.T/2;
-  p.push({name:`Base · ${basePlacement==="inside"?"entre laterales":"sobre laterales"}`,w:baseWidth,h:m.T,d:m.D,x:0,y:baseY,z:0,type:"horizontal",grain:"horizontal"});
-  p.push({name:`Tapa · ${roofPlacement==="inside"?"entre laterales":"sobre laterales"}`,w:roofWidth,h:m.T,d:m.D,x:0,y:roofY,z:0,type:"horizontal",grain:"horizontal"});
+  p.push({
+    name:`Base · ${basePlacement==="inside"?"entre laterales":"sobre laterales"}`,
+    w:baseWidth,h:m.T,d:m.D,x:0,y:baseY,z:0,type:"horizontal",grain:"horizontal"
+  });
+  p.push({
+    name:`Tapa · ${roofPlacement==="inside"?"entre laterales":"sobre laterales"}`,
+    w:roofW,h:m.T,d:roofD,x:0,y:roofY,z:-(m.D-roofD)/2,type:"horizontal",grain:"horizontal"
+  });
 
   dividers.forEach((d,i)=>{
     const x=-m.W/2+m.T+d.position+m.T/2;
@@ -239,49 +270,67 @@ function getParts(){
     const height=clamp(+shelf.height||0,0,Math.max(innerH-m.T,0));
     shelfMap.push({index:i,section:sec.index,height,width:sec.width});
     const y=-m.H/2+m.T+height+m.T/2;
-    p.push({name:`Estante ${i+1}`,w:sec.width,h:m.T,d:m.D,x:-m.W/2+m.T+sec.left+sec.width/2,y,z:0,type:"shelf",section:sec.index,grain:"horizontal"});
+    p.push({
+      name:`Estante ${i+1}`,w:sec.width,h:m.T,d:m.D,
+      x:-m.W/2+m.T+sec.left+sec.width/2,y,z:0,type:"shelf",section:sec.index,grain:"horizontal"
+    });
   });
 
-  const construction={baseWidth,roofWidth,verticalHeight,innerW,innerH,basePlacement,roofPlacement,clearHeight:innerH};
+  const construction={
+    baseWidth,roofWidth:roofW,roofAutoWidth,roofDepth:roofD,roofAutoDepth:m.D,
+    verticalHeight,innerW,innerH,basePlacement,roofPlacement,clearHeight:innerH
+  };
   const temp={model:m,sections:ss,parts:p,construction,shelfMap};
   const drawerSpaces=getDrawerSpaces(temp);
 
-  drawers.forEach((d,i)=>{
-    const sp=drawerSpaces.find(x=>x.id===d.spaceId);
-    if(!sp)return;
-    const guide=d.guideSystem==="telescopica"?"telescopica":"z";
-    const clearance=DRAWER_GUIDE_CLEARANCE[guide];
-    const outerW=Math.max(0,sp.width-clearance);
-    const boxH=clamp(+d.boxHeight||DRAWER_MIN_WALL,DRAWER_MIN_WALL,Math.max(sp.height,DRAWER_MIN_WALL));
-    const boxD=clamp(+d.depth||m.D,50,Math.max(m.D,50));
-    const innerBoxW=Math.max(0,outerW-2*m.T);
-    const sec=ss[sp.section];
-    const centerX=-m.W/2+m.T+sec.left+sec.width/2;
-    const centerZ=-(m.D-boxD)/2;
-    const boxY=-m.H/2+m.T+sp.bottom+boxH/2;
+  // Stack multiple drawers inside the same clear vertical space.
+  for(const sp of drawerSpaces){
+    const stack=getStackedDrawerLayout(drawers,sp);
+    for(const d of stack.items){
+      const guide=d.guideSystem==="telescopica"?"telescopica":"z";
+      const clearance=DRAWER_GUIDE_CLEARANCE[guide];
+      const outerW=Math.max(0,sp.width-clearance);
+      const boxH=d.allocatedHeight;
+      const boxD=clamp(+d.depth||m.D,50,Math.max(m.D,50));
+      const innerBoxW=Math.max(0,outerW-2*m.T);
+      const sec=ss[sp.section];
+      const centerX=-m.W/2+m.T+sec.left+sec.width/2;
+      const centerZ=-(m.D-boxD)/2;
+      const boxY=-m.H/2+m.T+sp.bottom+d.allocatedBottom+boxH/2;
 
-    p.push({name:`Cajón ${i+1} · lateral izquierdo`,w:m.T,h:boxH,d:boxD,x:centerX-outerW/2+m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
-    p.push({name:`Cajón ${i+1} · lateral derecho`,w:m.T,h:boxH,d:boxD,x:centerX+outerW/2-m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
-    p.push({name:`Cajón ${i+1} · frente interno`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ-boxD/2+m.T/2,type:"drawer",grain:"vertical"});
-    p.push({name:`Cajón ${i+1} · trasero`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ+boxD/2-m.T/2,type:"drawer",grain:"vertical"});
-    p.push({name:`Cajón ${i+1} · fondo`,w:innerBoxW,h:m.T,d:Math.max(0,boxD-2*m.T),x:centerX,y:boxY-boxH/2+m.T/2,z:centerZ,type:"drawer",grain:"horizontal"});
+      p.push({name:`Cajón ${drawers.findIndex(x=>x.id===d.id)+1} · lateral izquierdo`,w:m.T,h:boxH,d:boxD,x:centerX-outerW/2+m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
+      p.push({name:`Cajón ${drawers.findIndex(x=>x.id===d.id)+1} · lateral derecho`,w:m.T,h:boxH,d:boxD,x:centerX+outerW/2-m.T/2,y:boxY,z:centerZ,type:"drawer",grain:"vertical"});
+      p.push({name:`Cajón ${drawers.findIndex(x=>x.id===d.id)+1} · frente interno`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ-boxD/2+m.T/2,type:"drawer",grain:"vertical"});
+      p.push({name:`Cajón ${drawers.findIndex(x=>x.id===d.id)+1} · trasero`,w:innerBoxW,h:boxH,d:m.T,x:centerX,y:boxY,z:centerZ+boxD/2-m.T/2,type:"drawer",grain:"vertical"});
+      p.push({name:`Cajón ${drawers.findIndex(x=>x.id===d.id)+1} · fondo`,w:innerBoxW,h:m.T,d:Math.max(0,boxD-2*m.T),x:centerX,y:boxY-boxH/2+m.T/2,z:centerZ,type:"drawer",grain:"horizontal"});
 
-    const frontMode=d.frontMode==="outside"?"outside":"inside";
-    const frontW=frontMode==="inside"?Math.max(0,sp.width-6):sp.width+10;
-    const frontH=frontMode==="inside"?Math.max(0,sp.height-6):sp.height+10;
-    const frontZ=frontMode==="inside"?-m.D/2-m.T/2:-m.D/2+m.T/2;
-    p.push({name:`Frente de cajón ${i+1} · ${frontMode==="inside"?"dentro":"delante"}`,w:frontW,h:frontH,d:m.T,x:centerX,y:-m.H/2+m.T+sp.bottom+sp.height/2,z:frontZ,type:"drawer-front",grain:"vertical"});
-  });
+      // Front/tapa of drawer:
+      // inside = recessed, therefore behind cabinet front face (+T/2 in Z)
+      // outside = overlay, therefore in front of cabinet face (-T/2 in Z)
+      const frontMode=d.frontMode==="outside"?"outside":"inside";
+      const autoFrontW=frontMode==="inside"?Math.max(0,sp.width-6):sp.width+10;
+      const autoFrontH=frontMode==="inside"?Math.max(0,boxH-6):boxH+10;
+      const frontW=Number.isFinite(Number(d.frontWidth))&&Number(d.frontWidth)>0?Number(d.frontWidth):autoFrontW;
+      const frontH=Number.isFinite(Number(d.frontHeight))&&Number(d.frontHeight)>0?Number(d.frontHeight):autoFrontH;
+      // Cabinet front is at Z=-D/2. Recessed = behind it; overlay = in front.
+      const frontZ=frontMode==="inside"?-m.D/2+m.T/2:-m.D/2-m.T/2;
+      const frontY=-m.H/2+m.T+sp.bottom+d.allocatedBottom+boxH/2;
+
+      p.push({
+        name:`Frente de cajón ${drawers.findIndex(x=>x.id===d.id)+1} · ${frontMode==="inside"?"dentro":"delante"}`,
+        w:frontW,h:frontH,d:m.T,x:centerX,y:frontY,z:frontZ,type:"drawer-front",grain:"vertical"
+      });
+    }
+  }
 
   return {...temp,drawerSpaces};
 }
 
 function roundingCost(raw){
-  let s = {minimumPieceCost:4000,roundingUnit:1000};
-  try{ s = {...s,...JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}")}; }catch{}
-  const min = Math.max(+s.minimumPieceCost||0,0);
-  const unit = Math.max(+s.roundingUnit||1,1);
-  return raw<=0 ? 0 : Math.ceil(Math.max(raw,min)/unit)*unit;
+  let s={minimumPieceCost:4000,roundingUnit:1000};
+  try{s={...s,...JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}")}}catch{}
+  const min=Math.max(+s.minimumPieceCost||0,0),unit=Math.max(+s.roundingUnit||1,1);
+  return raw<=0?0:Math.ceil(Math.max(raw,min)/unit)*unit;
 }
 
 function formatPieceDims(p){
@@ -292,6 +341,7 @@ function formatPieceDims(p){
 function updateAll(){
   const data=getParts(),r=rec(),hasPrice=!!r;
   let area=0,cost=0;
+
   $("partsBody").innerHTML=data.parts.map(p=>{
     const aa=p.w*p.d/1e6; area+=aa;
     const line=hasPrice?roundingCost(aa*r.price):null;
@@ -324,25 +374,35 @@ function updateAll(){
 
   const st={minimumPieceCost:4000,roundingUnit:1000};
   try{Object.assign(st,JSON.parse(localStorage.getItem(window.SETTINGS_KEY)||"{}"))}catch{}
-  $("ruleMin").textContent=money(st.minimumPieceCost); $("ruleRound").textContent=money(st.roundingUnit);
+  $("ruleMin").textContent=money(st.minimumPieceCost);
+  $("ruleRound").textContent=money(st.roundingUnit);
 
   const warnings=[];
   data.sections.forEach(sec=>{if(sec.width<100)warnings.push(`Módulo ${sec.index+1} tiene ${sec.width.toFixed(0)} mm libres.`)});
+
+  // Tapa: show a warning when manually configured outside useful ranges.
+  const roofAuto=data.construction.roofAutoWidth;
+  if(Number(roofWidth)<magnitudeSafe(1))warnings.push("La tapa necesita un ancho mayor que 0 mm.");
+  if(Number(roofWidth)>data.model.W)warnings.push("El ancho de la tapa supera el ancho exterior del mueble.");
+  if(Number(roofDepth)>data.model.D)warnings.push("La profundidad de la tapa supera la profundidad del mueble.");
+
   drawers.forEach((d,i)=>{
     const sp=data.drawerSpaces.find(x=>x.id===d.spaceId);
-    if(!sp)warnings.push(`Cajón ${i+1}: el espacio ya no existe.`);
-    else{
-      if(sp.height<DRAWER_MIN_WALL)warnings.push(`Cajón ${i+1}: el espacio tiene menos de ${DRAWER_MIN_WALL} mm.`);
-      if(Number(d.boxHeight)<DRAWER_MIN_WALL)warnings.push(`Cajón ${i+1}: las paredes deben medir al menos ${DRAWER_MIN_WALL} mm.`);
-      if(Number(d.boxHeight)>sp.height)warnings.push(`Cajón ${i+1}: la caja supera la altura disponible.`);
-      const clear=d.guideSystem==="telescopica"?26:25;
-      if(sp.width<=clear)warnings.push(`Cajón ${i+1}: no hay ancho suficiente para esa guía.`);
-    }
+    if(!sp){warnings.push(`Cajón ${i+1}: el espacio ya no existe.`);return;}
+    const stack=data.drawerSpaces.find(x=>x.id===sp.id);
+    const grouped=drawers.filter(x=>x.spaceId===sp.id);
+    const total=grouped.reduce((sum,x)=>sum+Math.max(DRAWER_MIN_WALL,Number(x.boxHeight)||DRAWER_MIN_WALL),0);
+    if(total>sp.height)warnings.push(`Módulo ${sp.section+1} · espacio ${sp.zone}: los cajones suman ${Math.round(total)} mm y el espacio tiene ${Math.round(sp.height)} mm.`);
+    if(Number(d.boxHeight)<DRAWER_MIN_WALL)warnings.push(`Cajón ${i+1}: las paredes deben medir al menos ${DRAWER_MIN_WALL} mm.`);
+    if(sp.width<=(d.guideSystem==="telescopica"?26:25))warnings.push(`Cajón ${i+1}: no hay ancho suficiente para esa guía.`);
   });
+
   $("modelWarning").textContent=warnings.join(" ");
   $("modelWarning").classList.toggle("hidden",!warnings.length);
   render3D(data);
 }
+
+function magnitudeSafe(v){return Number.isFinite(Number(v))?Number(v):0;}
 
 function renderComponents(){
   const m=dims(),ss=sections(m),data=getParts(),spaces=data.drawerSpaces,guideList=guideAccessories();
@@ -366,11 +426,31 @@ function renderComponents(){
     const guideOptions=guideList.length
       ? `<option value="">Seleccionar guía...</option>${guideList.map(g=>`<option value="${g.guideSystem}|${g.id}" ${g.id===d.guideId?"selected":""}>${g.name} · ${g.guideSystem==="telescopica"?"Telescópica":"Guía Z"}</option>`).join("")}`
       : `<option value="z|">Guía Z</option><option value="telescopica|">Guía telescópica</option>`;
+
+    const group=drawers.filter(x=>x.spaceId===sp.id);
+    const total=group.reduce((sum,x)=>sum+Math.max(DRAWER_MIN_WALL,Number(x.boxHeight)||DRAWER_MIN_WALL),0);
+    const overflow=Math.max(0,total-sp.height);
+    const guideClear=d.guideSystem==="telescopica"?26:25;
+    const boxWidth=Math.max(0,sp.width-guideClear);
+    const autoFrontW=d.frontMode==="outside"?sp.width+10:Math.max(0,sp.width-6);
+    const autoFrontH=d.frontMode==="outside"?Math.max(DRAWER_MIN_WALL,Number(d.boxHeight)||DRAWER_MIN_WALL)+10:Math.max(0,(Number(d.boxHeight)||DRAWER_MIN_WALL)-6);
+    const frontW=Number.isFinite(Number(d.frontWidth))&&Number(d.frontWidth)>0?Number(d.frontWidth):autoFrontW;
+    const frontH=Number.isFinite(Number(d.frontHeight))&&Number(d.frontHeight)>0?Number(d.frontHeight):autoFrontH;
+
     return `<div class="drawer-card">
       <div class="drawer-grid">
-        <label>Espacio<select class="drawer-space" data-id="${d.id}">${eligible.map(x=>`<option value="${x.id}" ${x.id===d.spaceId?"selected":""}>${x.label}</option>`).join("")}</select></label>
-        <label>Alto caja<div class="input-with-unit"><input class="drawer-height" data-id="${d.id}" type="number" min="${DRAWER_MIN_WALL}" max="${Math.max(sp.height,DRAWER_MIN_WALL)}" value="${Math.round(d.boxHeight||DRAWER_MIN_WALL)}"><span>mm</span></div></label>
-        <label>Profundidad<div class="input-with-unit"><input class="drawer-depth" data-id="${d.id}" type="number" min="50" max="${m.D}" value="${Math.round(d.depth||m.D)}"><span>mm</span></div></label>
+        <label>Espacio<select class="drawer-space" data-id="${d.id}">
+          ${eligible.map(x=>`<option value="${x.id}" ${x.id===d.spaceId?"selected":""}>${x.label}</option>`).join("")}
+        </select></label>
+        <label>Alto caja
+          <div class="input-with-unit">
+            <input class="drawer-height drawer-height-input" data-id="${d.id}" type="number" min="${DRAWER_MIN_WALL}" max="${Math.max(sp.height, DRAWER_MIN_WALL)}" value="${Math.round(d.boxHeight||DRAWER_MIN_WALL)}">
+            <span>mm</span>
+          </div>
+        </label>
+        <label>Profundidad
+          <div class="input-with-unit"><input class="drawer-depth" data-id="${d.id}" type="number" min="50" max="${m.D}" value="${Math.round(d.depth||m.D)}"><span>mm</span></div>
+        </label>
         <label>Guía<select class="drawer-guide" data-id="${d.id}">${guideOptions}</select></label>
         <label>Frente<select class="drawer-front-mode" data-id="${d.id}">
           <option value="inside" ${d.frontMode!=="outside"?"selected":""}>Dentro del espacio</option>
@@ -378,60 +458,149 @@ function renderComponents(){
         </select></label>
         <button class="danger-btn remDrawer" data-id="${d.id}" type="button">Eliminar</button>
       </div>
+      <div class="drawer-front-grid">
+        <label>Ancho frente
+          <div class="input-with-unit"><input class="drawer-front-width" data-id="${d.id}" type="number" min="1" step="1" value="${Math.round(frontW)}"><span>mm</span></div>
+        </label>
+        <label>Alto frente
+          <div class="input-with-unit"><input class="drawer-front-height" data-id="${d.id}" type="number" min="1" step="1" value="${Math.round(frontH)}"><span>mm</span></div>
+        </label>
+        <button class="secondary-btn reset-drawer-front" data-id="${d.id}" type="button">Medida automática</button>
+      </div>
       <div class="drawer-meta">
         <div class="summary-line"><b>Ancho espacio:</b> ${Math.round(sp.width)} mm</div>
-        <div class="summary-line"><b>Ancho caja:</b> ${Math.max(0,Math.round(sp.width-(d.guideSystem==="telescopica"?26:25)))} mm</div>
-        <div class="summary-line"><b>Paredes mín.:</b> ${DRAWER_MIN_WALL} mm</div>
-        <div class="summary-line"><b>Frente:</b> ${d.frontMode==="outside"?`${Math.max(0,Math.round(sp.width+10))} × ${Math.max(0,Math.round(sp.height+10))} mm`:`${Math.max(0,Math.round(sp.width-6))} × ${Math.max(0,Math.round(sp.height-6))} mm`}</div>
+        <div class="summary-line"><b>Ancho caja:</b> ${Math.round(boxWidth)} mm</div>
+        <div class="summary-line"><b>Frente automático:</b> ${Math.round(autoFrontW)} × ${Math.round(autoFrontH)} mm</div>
+        <div class="summary-line"><b>Margen:</b> ${d.frontMode==="outside"?"+5 mm/lado":"−3 mm/lado"}</div>
       </div>
+      ${overflow>0?`<div class="drawer-overflow">⚠ Los cajones de este espacio exceden en ${Math.round(overflow)} mm la altura disponible.</div>`:""}
     </div>`;
   }).join(""):'<div class="empty-mini">No hay cajones. Agregá uno para usar un espacio libre de al menos 80 mm.</div>';
 
   const baseLabel=basePlacement==="inside"?"Entre laterales":"Sobre laterales";
   const roofLabel=roofPlacement==="inside"?"Entre laterales":"Sobre laterales";
   const baseCut=basePlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
-  const roofCut=roofPlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
+  const roofAutoCut=roofPlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
   const sideCut=Math.max(0,m.H-(basePlacement==="outside"?m.T:0)-(roofPlacement==="outside"?m.T:0));
+
+  $("roofWidth").value=Math.round(roofWidth??roofAutoCut);
+  $("roofDepth").value=Math.round(roofDepth??m.D);
+
   $("constructionSummary").innerHTML=`
     <div class="summary-line"><b>Base:</b> ${baseLabel} · ancho de corte <b>${baseCut.toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Tapa:</b> ${roofLabel} · ancho de corte <b>${roofCut.toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Laterales:</b> altura de corte <b>${sideCut.toFixed(0)} mm</b></div>
-    <div class="summary-line"><b>Divisiones / estantes:</b> ancho calculado automáticamente según el espacio libre · espesor <b>${m.T} mm</b></div>`;
+    <div class="summary-line"><b>Tapa:</b> ${roofLabel} · ancho de corte <b>${Number(roofWidth??roofAutoCut).toFixed(0)} mm</b></div>
+    <div class="summary-line"><b>Tapa:</b> profundidad de corte <b>${Number(roofDepth??m.D).toFixed(0)} mm</b></div>
+    <div class="summary-line"><b>Laterales:</b> altura de corte <b>${sideCut.toFixed(0)} mm</b></div>`;
 }
 
-$("basePlacement").addEventListener("change",e=>{basePlacement=e.target.value==="outside"?"outside":"inside";renderComponents();updateAll();});
-$("roofPlacement").addEventListener("change",e=>{roofPlacement=e.target.value==="outside"?"outside":"inside";renderComponents();updateAll();});
-$("addDivider").addEventListener("click",()=>{const m=dims();dividers.push({id:uid(),position:Math.min(300,Math.max(m.W-3*m.T,0))});renderComponents();updateAll();});
-$("addShelf").addEventListener("click",()=>{shelves.push({id:uid(),section:0,height:300});renderComponents();updateAll();});
+// Placement and top dimensions.
+$("basePlacement").addEventListener("change",e=>{
+  basePlacement=e.target.value==="outside"?"outside":"inside";
+  renderComponents(); updateAll();
+});
+$("roofPlacement").addEventListener("change",e=>{
+  roofPlacement=e.target.value==="outside"?"outside":"inside";
+  roofWidth=(roofPlacement==="inside" ? Math.max(dims().W-2*dims().T,0) : dims().W);
+  roofDepth=dims().D;
+  renderComponents();updateAll();
+});
+$("roofWidth").addEventListener("input",e=>{
+  roofWidth=Math.max(1,Number(e.target.value)||1);
+  updateAll();
+});
+$("roofDepth").addEventListener("input",e=>{
+  roofDepth=Math.max(1,Number(e.target.value)||1);
+  updateAll();
+});
+$("roofAutoSize").addEventListener("click",()=>{
+  const m=dims();
+  roofWidth=roofPlacement==="inside"?Math.max(m.W-2*m.T,0):m.W;
+  roofDepth=m.D;
+  renderComponents();updateAll();
+});
+
+$("addDivider").addEventListener("click",()=>{
+  const m=dims();dividers.push({id:uid(),position:Math.min(300,Math.max(m.W-3*m.T,0))});renderComponents();updateAll();
+});
+$("addShelf").addEventListener("click",()=>{
+  shelves.push({id:uid(),section:0,height:300});renderComponents();updateAll();
+});
 $("addDrawer").addEventListener("click",()=>{
-  const data=getParts(),used=new Set(drawers.map(d=>d.spaceId)),space=data.drawerSpaces.find(sp=>sp.height>=DRAWER_MIN_WALL&&!used.has(sp.id));
-  if(!space){alert("No hay un espacio libre disponible con al menos 80 mm de altura.");return;}
-  drawers.push({id:uid(),spaceId:space.id,boxHeight:Math.min(120,space.height),depth:data.model.D,guideSystem:"z",guideId:"",frontMode:"inside"});
+  const data=getParts();
+  // Prefer the last drawer's space when another drawer can still fit, enabling easy
+  // creation of stacked drawers in one opening.
+  const last=drawers[drawers.length-1];
+  let space=last?data.drawerSpaces.find(sp=>sp.id===last.spaceId):null;
+  if(!space || (space.height-drawers.filter(d=>d.spaceId===space.id).reduce((sum,d)=>sum+Math.max(DRAWER_MIN_WALL,Number(d.boxHeight)||DRAWER_MIN_WALL),0))<DRAWER_MIN_WALL){
+    space=data.drawerSpaces.find(sp=>{
+      const used=drawers.filter(d=>d.spaceId===sp.id).reduce((sum,d)=>sum+Math.max(DRAWER_MIN_WALL,Number(d.boxHeight)||DRAWER_MIN_WALL),0);
+      return sp.height-used>=DRAWER_MIN_WALL;
+    });
+  }
+  if(!space){alert("No hay un espacio libre disponible con al menos 80 mm de altura restante.");return;}
+  drawers.push({
+    id:uid(),spaceId:space.id,
+    boxHeight:Math.min(120,Math.max(DRAWER_MIN_WALL,space.height-
+      drawers.filter(d=>d.spaceId===space.id).reduce((sum,d)=>sum+Math.max(DRAWER_MIN_WALL,Number(d.boxHeight)||DRAWER_MIN_WALL),0))),
+    depth:data.model.D,guideSystem:"z",guideId:"",frontMode:"inside",frontWidth:null,frontHeight:null
+  });
   renderComponents();updateAll();
 });
-$("dividersList").addEventListener("change",e=>{const el=e.target.closest(".divPos");if(!el)return;const d=dividers.find(x=>x.id===el.dataset.id);if(d)d.position=+el.value||0;renderComponents();updateAll();});
-$("dividersList").addEventListener("click",e=>{const b=e.target.closest(".remDiv");if(!b)return;dividers=dividers.filter(x=>x.id!==b.dataset.id);shelves=shelves.map(s=>({...s,section:Math.min(s.section,dividers.length)}));renderComponents();updateAll();});
-$("shelvesList").addEventListener("change",e=>{const h=e.target.closest(".shelfH"),s=e.target.closest(".shelfS");const item=(h||s)&&shelves.find(x=>x.id===(h||s).dataset.id);if(!item)return;if(h)item.height=+h.value||0;if(s)item.section=+s.value||0;renderComponents();updateAll();});
-$("shelvesList").addEventListener("click",e=>{const b=e.target.closest(".remShelf");if(!b)return;shelves=shelves.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();});
+
+$("dividersList").addEventListener("change",e=>{
+  const el=e.target.closest(".divPos");if(!el)return;const d=dividers.find(x=>x.id===el.dataset.id);if(d)d.position=+el.value||0;renderComponents();updateAll();
+});
+$("dividersList").addEventListener("click",e=>{
+  const b=e.target.closest(".remDiv");if(!b)return;dividers=dividers.filter(x=>x.id!==b.dataset.id);shelves=shelves.map(s=>({...s,section:Math.min(s.section,dividers.length)}));renderComponents();updateAll();
+});
+$("shelvesList").addEventListener("change",e=>{
+  const h=e.target.closest(".shelfH"),s=e.target.closest(".shelfS");
+  const item=(h||s)&&shelves.find(x=>x.id===(h||s).dataset.id);if(!item)return;
+  if(h)item.height=+h.value||0;
+  if(s)item.section=+s.value||0;
+  renderComponents();updateAll();
+});
+$("shelvesList").addEventListener("click",e=>{
+  const b=e.target.closest(".remShelf");if(!b)return;shelves=shelves.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();
+});
+
+// Drawer controls: do not rebuild the form while typing numeric values.
 $("drawersList").addEventListener("change",e=>{
-  const q=[e.target.closest(".drawer-space"),e.target.closest(".drawer-height"),e.target.closest(".drawer-depth"),e.target.closest(".drawer-guide"),e.target.closest(".drawer-front-mode")].find(Boolean);
-  if(!q)return;
-  const d=drawers.find(x=>x.id===q.dataset.id);if(!d)return;
-  if(e.target.closest(".drawer-space")){
-    d.spaceId=e.target.value;
+  const el=[e.target.closest(".drawer-space"),e.target.closest(".drawer-depth"),e.target.closest(".drawer-guide"),e.target.closest(".drawer-front-mode"),e.target.closest(".drawer-front-width"),e.target.closest(".drawer-front-height")].find(Boolean);
+  if(!el)return;
+  const d=drawers.find(x=>x.id===el.dataset.id); if(!d)return;
+  if(el.matches(".drawer-space")){
+    d.spaceId=el.value;
+    d.frontWidth=null; d.frontHeight=null;
     const sp=getParts().drawerSpaces.find(x=>x.id===d.spaceId);
-    if(sp)d.boxHeight=Math.min(Math.max(Number(d.boxHeight)||DRAWER_MIN_WALL,DRAWER_MIN_WALL),sp.height);
+    if(sp)d.boxHeight=Math.max(DRAWER_MIN_WALL,Math.min(Number(d.boxHeight)||DRAWER_MIN_WALL,sp.height));
   }
-  if(e.target.closest(".drawer-height"))d.boxHeight=Math.max(DRAWER_MIN_WALL,+e.target.value||DRAWER_MIN_WALL);
-  if(e.target.closest(".drawer-depth"))d.depth=+e.target.value||dims().D;
-  if(e.target.closest(".drawer-guide")){
-    const [system,id]=String(e.target.value).split("|");
-    d.guideSystem=system==="telescopica"?"telescopica":"z";d.guideId=id||"";
-  }
-  if(e.target.closest(".drawer-front-mode"))d.frontMode=e.target.value==="outside"?"outside":"inside";
-  renderComponents();updateAll();
+  if(el.matches(".drawer-depth"))d.depth=Math.max(50,Number(el.value)||dims().D);
+  if(el.matches(".drawer-guide")){const [system,id]=String(el.value).split("|");d.guideSystem=system==="telescopica"?"telescopica":"z";d.guideId=id||"";}
+  if(el.matches(".drawer-front-mode")){d.frontMode=el.value==="outside"?"outside":"inside";d.frontWidth=null;d.frontHeight=null;}
+  if(el.matches(".drawer-front-width"))d.frontWidth=Math.max(1,Number(el.value)||1);
+  if(el.matches(".drawer-front-height"))d.frontHeight=Math.max(1,Number(el.value)||1);
+  renderComponents(); updateAll();
 });
-$("drawersList").addEventListener("click",e=>{const b=e.target.closest(".remDrawer");if(!b)return;drawers=drawers.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();});
+
+$("drawersList").addEventListener("input",e=>{
+  const el=[e.target.closest(".drawer-height"),e.target.closest(".drawer-front-width"),e.target.closest(".drawer-front-height")].find(Boolean);
+  if(!el)return;
+  const d=drawers.find(x=>x.id===el.dataset.id); if(!d)return;
+  if(el.matches(".drawer-height"))d.boxHeight=Math.max(DRAWER_MIN_WALL,Number(el.value)||DRAWER_MIN_WALL);
+  if(el.matches(".drawer-front-width"))d.frontWidth=Math.max(1,Number(el.value)||1);
+  if(el.matches(".drawer-front-height"))d.frontHeight=Math.max(1,Number(el.value)||1);
+  updateAll();
+});
+
+$("drawersList").addEventListener("click",e=>{
+  const reset=e.target.closest(".reset-drawer-front");
+  if(reset){const d=drawers.find(x=>x.id===reset.dataset.id);if(!d)return;d.frontWidth=null;d.frontHeight=null;renderComponents();updateAll();return;}
+  const b=e.target.closest(".remDrawer");
+  if(!b)return;
+  drawers=drawers.filter(x=>x.id!==b.dataset.id);renderComponents();updateAll();
+});
+
 // -------------------- PERSPECTIVE 3D --------------------
 
 function vertices(part){
@@ -776,6 +945,9 @@ function init(){
   initMaterialSelectors();
   $("basePlacement").value=basePlacement;
   $("roofPlacement").value=roofPlacement;
+  const initialDims=dims();
+  roofWidth=roofPlacement==="inside"?Math.max(initialDims.W-2*initialDims.T,0):initialDims.W;
+  roofDepth=initialDims.D;
   renderVariant();
   renderThickness();
   renderComponents();
