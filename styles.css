@@ -22,6 +22,7 @@ h3{font-size:15px;margin:0}
 .page-intro p,.viewer-head p{color:var(--muted);margin:0}
 .status-pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 15px;font-size:13px;font-weight:800;white-space:nowrap}
 .calculator-layout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:14px;align-items:start}
+.right-column{display:grid;gap:14px;align-content:start;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 5px 18px rgba(0,0,0,.035)}
 .controls-panel{padding:14px;position:sticky;top:10px;max-height:none;overflow:visible}
 .viewer-panel{padding:18px}
@@ -290,10 +291,10 @@ th{font-size:10px;color:#85857f;text-transform:uppercase;letter-spacing:.08em}
 .drawer-overflow{margin-top:5px;color:#8a5a00;font-size:10px;font-weight:800}
 @media(max-width:760px){.drawer-front-grid{grid-template-columns:1fr 1fr}.drawer-front-grid .secondary-btn{grid-column:1/-1;justify-self:start}}
 
-/* V2.6 · Cajones a ancho completo */
-.drawers-panel{margin-top:14px;padding:16px}
+/* V2.7 · Cajones debajo del visor, dentro de la columna derecha */
+.drawers-panel{margin-top:0;padding:16px;min-width:0}
 .drawer-intro{margin:0 0 11px;color:#6d6d68;font-size:11px;line-height:1.45}
-.drawer-list-wide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.drawer-list-wide{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;min-width:0}
 .drawer-list-wide .drawer-card{padding:10px;border:1px solid var(--line);border-radius:12px;background:#fafaf8}
 .drawer-list-wide .drawer-grid{
   display:grid;
@@ -307,9 +308,8 @@ th{font-size:10px;color:#85857f;text-transform:uppercase;letter-spacing:.08em}
 .drawer-list-wide .drawer-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:7px}
 .drawer-list-wide .drawer-meta .summary-line{padding:7px 8px;font-size:10px}
 .drawer-list-wide .drawer-overflow{margin-top:6px}
-@media(max-width:1150px){
-  .drawer-list-wide{grid-template-columns:1fr}
-  .drawer-list-wide .drawer-grid{grid-template-columns:minmax(160px,1.4fr) 100px 115px minmax(140px,1fr) minmax(140px,1fr) 70px}
+@media(max-width:1350px){
+  .drawer-list-wide .drawer-grid{grid-template-columns:minmax(130px,1.4fr) 84px minmax(92px,.9fr) minmax(125px,1.2fr)}
 }
 @media(max-width:760px){
   .drawers-panel{padding:12px}

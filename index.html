@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#171717">
 <title>Presupuestador de Muebles</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=2.7">
 <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -79,6 +79,7 @@
       <div id="modelWarning" class="warning hidden"></div>
     </aside>
 
+    <div class="right-column">
     <section class="panel viewer-panel">
       <div class="viewer-head">
         <div><div class="page-kicker">PREVISUALIZACIÓN</div><h3>Modelo 3D en perspectiva</h3><p>Arrastrá en cualquier dirección para orbitar en perspectiva · rueda/pinch para zoom · Shift + arrastre para desplazar.</p></div>
@@ -97,16 +98,17 @@
         <div class="dimension-card"><span>Estantes</span><strong id="shelfCount">0</strong></div>
       </div>
     </section>
-  </div>
 
-  <section class="panel drawers-panel">
-    <div class="panel-title spread">
-      <div><span class="step">06</span><h3>Cajones</h3></div>
-      <button id="addDrawer" class="secondary-btn" type="button">+ Cajón</button>
+    <section class="panel drawers-panel">
+      <div class="panel-title spread">
+        <div><span class="step">06</span><h3>Cajones</h3></div>
+        <button id="addDrawer" class="secondary-btn" type="button">+ Cajón</button>
+      </div>
+      <p class="drawer-intro">Cada cajón ocupa un espacio libre entre horizontales dentro de un módulo. La caja tiene una altura mínima de 80 mm; el ancho se calcula según la guía. Podés apilar varios cajones en el mismo espacio.</p>
+      <div id="drawersList" class="drawer-list-wide"></div>
+    </section>
     </div>
-    <p class="drawer-intro">Cada cajón ocupa un espacio libre entre horizontales dentro de un módulo. La caja tiene una altura mínima de 80 mm; el ancho se calcula según la guía. Podés apilar varios cajones en el mismo espacio.</p>
-    <div id="drawersList" class="drawer-list-wide"></div>
-  </section>
+  </div>
 
   <section class="panel budget-panel">
     <div class="panel-title spread"><div><span class="step">07</span><h3>Despiece y costo de material cortado</h3></div><div class="muted" id="priceM2Label">—</div></div>
@@ -121,7 +123,7 @@
   </section>
 </section>
 </main>
-<footer class="footer-note">V2.6 · Cajones a ancho completo · Los precios y materiales se guardan localmente en este navegador.</footer>
+<footer class="footer-note">V2.7 · Cajones debajo del visor 3D · Los precios y materiales se guardan localmente en este navegador.</footer>
 <script src="catalog.js"></script>
-<script src="app.js?v=2.6"></script>
+<script src="app.js?v=2.7"></script>
 </body></html>
